@@ -1,0 +1,12 @@
+
+also add session id for identifiable sequence
+similar with machines?
+
+maybe add "boring commands" and never log them
+or never search for them?
+
+https://github.com/larkery/zsh-histdb/tree/4274de7c1bca84f440fb0125e6931c1f75ad5e29
+
+sync, thru connections ssh
+or thru git?
+merging logic is easy
