@@ -1,0 +1,18 @@
+#!/bin/zsh
+set -eu -o pipefail
+
+if [[ -v 1 ]]; then
+    sources=$1
+else
+    # without argument $1 we scan the whole project
+    sources=(python)
+fi
+
+# assuming your environment does something like
+# 'python3 some/path/ptags.py $@'
+# mapped to 'ptags'
+ptags \
+        $sources \
+        --out=- \
+        --fmt=vim-fzf \
+        --quiet
