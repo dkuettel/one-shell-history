@@ -1,0 +1,54 @@
+#!/bin/zsh
+#set -eux -o pipefail
+
+autoload -U add-zsh-hook
+
+function before {
+    #pipenv run python python/osh/zsh.py add $1 &>/dev/null &!
+    #echo $1 | nc -UN ./server-socket &>/dev/null &!
+    osh_current_command=(
+        $(date +%s)  # start time
+        ${1[0,-2]}  # command
+    )
+}
+
+function after {
+    local exit_code=$?
+    if [[ -v osh_current_command ]]; then
+        osh_current_command+=(
+            $(date +%s)  # end time
+            $exit_code  # exit code
+            $(pwd)  # folder
+            $(hostname)  # machine
+        )
+        pipenv run python -m osh.zsh add $osh_current_command &>/dev/null &!
+        osh_current_command=
+    fi
+}
+
+add-zsh-hook zshaddhistory before
+add-zsh-hook precmd after
+
+#function osh-search {
+#  local selected num
+#  setopt localoptions noglobsubst noposixbuiltins pipefail no_aliases 2> /dev/null
+#  selected=( $(fc -rl 1 | perl -ne 'print if !$seen{(/^\s*[0-9]+\s+(.*)/, $1)}++' |
+#    FZF_DEFAULT_OPTS="--height ${FZF_TMUX_HEIGHT:-40%} $FZF_DEFAULT_OPTS -n2..,.. --tiebreak=index --bind=ctrl-r:toggle-sort $FZF_CTRL_R_OPTS --query=${(qqq)LBUFFER} +m" $(__fzfcmd)) )
+#  local ret=$?
+#  if [ -n "$selected" ]; then
+#    num=$selected[1]
+#    if [ -n "$num" ]; then
+#      zle vi-fetch-history -n $num
+#    fi
+#  fi
+#  zle reset-prompt
+#  return $ret
+#}
+
+function osh-search {
+    BUFFER=$(pipenv run python -m osh.zsh ls | fzf)
+    CURSOR=$#BUFFER
+}
+
+zle -N osh-search
+bindkey '^e' osh-search
