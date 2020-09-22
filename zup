@@ -46,7 +46,8 @@ add-zsh-hook precmd after
 #}
 
 function osh-search {
-    BUFFER=$(pipenv run python -m osh.zsh ls | fzf)
+    selection=$(pipenv run python -m osh.zsh ls 2>/dev/null | fzf)
+    BUFFER=$(pipenv run python -m osh.zsh get $selection 2>/dev/null)
     CURSOR=$#BUFFER
 }
 

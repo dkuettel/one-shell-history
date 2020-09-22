@@ -50,8 +50,23 @@ def ls():
     file = Path("./zsh-history.json")
     history = H.read_from_file(file, or_empty=True)
 
-    for entry in reversed(history):
-        print(entry.command.replace("\n", "\\n"))
+    for i, entry in enumerate(reversed(history), start=1):
+        print(i, entry.command.replace("\n", "..."))
+
+
+@cli.command()
+@click.argument("selection")
+def get(selection):
+
+    from pathlib import Path
+
+    import osh.history as H
+
+    file = Path("./zsh-history.json")
+    history = H.read_from_file(file, or_empty=True)
+
+    selection = int(selection.split(" ", maxsplit=1)[0])
+    print(history[-selection].command)
 
 
 if __name__ == "__main__":
