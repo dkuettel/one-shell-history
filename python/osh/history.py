@@ -1,8 +1,9 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, List, Iterable
 import datetime
 import json
 from pathlib import Path
+from contextlib import contextmanager
 
 
 @dataclass(order=True, frozen=True)
@@ -62,3 +63,17 @@ def write_to_file(history: List[Event], file: Path):
     json_dict = [event.to_json_dict() for event in history]
     json_str = json.dumps(json_dict, indent=2)
     file.write_text(json_str)
+
+
+@dataclass
+class FromFile:
+    filename: Path = Path("zsh-history.json")
+    events: Optional[List[Event]] = None
+
+    @contextmanager
+    def edit(self):
+        assert self.events is None
+        self.events = read_from_file(self.filename, or_empty=True)
+        yield
+        write_to_file(self.events, self.filename)
+        self.events = None
