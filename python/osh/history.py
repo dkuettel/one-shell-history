@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 @dataclass(order=True, frozen=True)
-class Entry:
+class Event:
     timestamp: datetime.datetime
     command: str
     duration: Optional[float] = None
@@ -43,22 +43,22 @@ class Entry:
         return cls(**jd)
 
 
-def make(entries: Iterable[Entry]) -> List[Entry]:
-    return sorted(set(entries))
+def make(events: Iterable[Event]) -> List[Event]:
+    return sorted(set(events))
 
 
-def merge(histories: List[List[Entry]]) -> List[Entry]:
-    return make({entry for history in histories for entry in history})
+def merge(histories: List[List[Event]]) -> List[Event]:
+    return make({event for history in histories for event in history})
 
 
-def read_from_file(file: Path, or_empty: bool = False) -> List[Entry]:
+def read_from_file(file: Path, or_empty: bool = False) -> List[Event]:
     if or_empty and not file.exists():
         return []
     history = json.loads(file.read_text())
-    return [Entry.from_json_dict(entry) for entry in history]
+    return [Event.from_json_dict(event) for event in history]
 
 
-def write_to_file(history: List[Entry], file: Path):
-    json_dict = [entry.to_json_dict() for entry in history]
+def write_to_file(history: List[Event], file: Path):
+    json_dict = [event.to_json_dict() for event in history]
     json_str = json.dumps(json_dict, indent=2)
     file.write_text(json_str)
