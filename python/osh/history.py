@@ -1,16 +1,18 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, astuple
 from typing import Optional, List, Iterable
 import datetime
 import json
 from pathlib import Path
 from contextlib import contextmanager
+from functools import total_ordering
 
 
-@dataclass(order=True, frozen=True)
+@total_ordering
+@dataclass(frozen=True)
 class Event:
     timestamp: datetime.datetime
     command: str
-    duration: Optional[float] = None
+    duration: Optional[int] = None
     exit_code: Optional[int] = None
     folder: Optional[str] = None
     machine: Optional[str] = None
@@ -42,6 +44,19 @@ class Event:
         jd = dict(jd)
         jd["timestamp"] = datetime.datetime.fromisoformat(jd["timestamp"])
         return cls(**jd)
+
+    def __lt__(self, other):
+        assert type(self) is Event
+        assert type(other) is Event
+        for a, b in zip(astuple(self), astuple(other)):
+            if a != b:
+                # we make None < anything else
+                if a is None:
+                    return True
+                if b is None:
+                    return False
+                return a < b
+        return False
 
 
 def make(events: Iterable[Event]) -> List[Event]:
