@@ -101,8 +101,9 @@ class FromFile:
 
 
 def generate_pruned_for_search(history: Iterable[Event]) -> Iterable[Event]:
+    boring = {"ls", "lr", "ll", "htop", "v"}
     used = set()
     for event in reversed(history):
-        if event.command not in used:
+        if (event.command not in used) and (event.command not in boring):
             used.add(event.command)
             yield event
