@@ -1,4 +1,17 @@
 
+merging zsh_history and keeping both running with produce duplicates
+we cant easily match them. should switch off when changing
+maybe make an export too to feel more safe?
+
+have some warning in daemon or somewhere when it sees an old-style history (growing)?
+maybe use a heuristic to match in this case? time is close and command is exactly the same, machine? others are unset, duration is probably not the same either
+
+zsh_history duration value doesnt seem to be accurate, always 0?
+
+make session working too
+maybe prioritize them in search, or in upkey?
+
+
 also add session id for identifiable sequence
 similar with machines?
 
