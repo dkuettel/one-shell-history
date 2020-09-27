@@ -98,7 +98,9 @@ def fzf_select():
                 pass
             fzf.wait()
             try:
-                selection = int(fzf.stdout.read().decode("utf-8").split(" ", maxsplit=1)[0])
+                selection = int(
+                    fzf.stdout.read().decode("utf-8").split(" ", maxsplit=1)[0]
+                )
                 print(history[selection])
             except:
                 pass
