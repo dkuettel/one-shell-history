@@ -75,7 +75,16 @@ def fzf_select():
     with json_socket(socket_file) as stream:
         stream.write({"command": "list_events"})
         with subprocess.Popen(
-            args=["fzf"], stdin=subprocess.PIPE, stdout=subprocess.PIPE
+            args=[
+                "fzf",
+                "--reverse",
+                "--height=50%",
+                "--nth=2..",
+                "--preview-window=down:8:wrap",
+                "--preview=echo {}",
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
         ) as fzf:
             history = []
             while fzf.poll() is None:
