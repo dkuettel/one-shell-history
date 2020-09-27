@@ -34,7 +34,9 @@ def serve():
                 elif message["command"] == "list_events":
                     with history.edit():
                         try:
-                            for event in reversed(history.events):
+                            for event in osh.history.generate_pruned_for_search(
+                                history.events
+                            ):
                                 import time
 
                                 time.sleep(0.1)

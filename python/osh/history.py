@@ -81,3 +81,11 @@ class FromFile:
     def insert_event(self, event: Event):
         assert self.events is not None
         self.events = merge([self.events, [event]])
+
+
+def generate_pruned_for_search(history: Iterable[Event]) -> Iterable[Event]:
+    used = set()
+    for event in reversed(history):
+        if event.command not in used:
+            used.add(event.command)
+            yield event
