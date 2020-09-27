@@ -37,9 +37,6 @@ def serve():
                             for event in osh.history.generate_pruned_for_search(
                                 history.events
                             ):
-                                import time
-
-                                time.sleep(0.1)
                                 stream.write(event.command)
                             stream.write(0)
                         except:
