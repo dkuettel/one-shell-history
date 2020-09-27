@@ -3,9 +3,15 @@
 
 autoload -U add-zsh-hook
 
+function run {
+    (
+        source .venv/bin/activate
+        export PYTHONPATH=python
+        python $@
+    )
+}
+
 function before {
-    #pipenv run python python/osh/zsh.py add $1 &>/dev/null &!
-    #echo $1 | nc -UN ./server-socket &>/dev/null &!
     osh_current_command=(
         $(date +%s)  # start time
         ${1[0,-2]}  # command
@@ -21,8 +27,8 @@ function after {
             $(pwd)  # folder
             $(hostname)  # machine
         )
-        pipenv run python -m osh.socket insert-event $osh_current_command &>/dev/null &!
-        osh_current_command=
+        run -m osh.socket insert-event $osh_current_command &!
+        unset osh_current_command
     fi
 }
 
@@ -46,9 +52,7 @@ add-zsh-hook precmd after
 #}
 
 function osh-search {
-    #selection=$(pipenv run python -m osh.zsh ls 2>/dev/null | fzf)
-    #BUFFER=$(pipenv run python -m osh.zsh get $selection 2>/dev/null)
-    BUFFER=$(pipenv run python -m osh.socket fzf-select | tail -n +1)
+    BUFFER=$(run -m osh.socket fzf-select)
     CURSOR=$#BUFFER
 }
 
