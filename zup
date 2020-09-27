@@ -12,10 +12,13 @@ function run {
 }
 
 function before {
-    osh_current_command=(
-        $(date +%s)  # start time
-        ${1[0,-2]}  # command
-    )
+    local command=${1[0,-2]}
+    if [[ $command != '' ]]; then
+        osh_current_command=(
+            $(date +%s)  # start time
+            $command  # command
+        )
+    fi
 }
 
 function after {
