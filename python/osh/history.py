@@ -37,6 +37,8 @@ class Event:
             jd["folder"] = self.folder
         if self.machine is not None:
             jd["machine"] = self.machine
+        if self.session is not None:
+            jd["session"] = self.session
         return jd
 
     @classmethod

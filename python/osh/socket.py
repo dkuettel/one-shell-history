@@ -52,7 +52,8 @@ def serve():
 @click.argument("exit_code", type=int)
 @click.argument("folder", type=str)
 @click.argument("machine", type=str)
-def insert_event(starttime, command, endtime, exit_code, folder, machine):
+@click.argument("session", type=str)
+def insert_event(starttime, command, endtime, exit_code, folder, machine, session):
 
     starttime = datetime.datetime.fromtimestamp(starttime, tz=datetime.timezone.utc)
     endtime = datetime.datetime.fromtimestamp(endtime, tz=datetime.timezone.utc)
@@ -64,6 +65,7 @@ def insert_event(starttime, command, endtime, exit_code, folder, machine):
         exit_code=exit_code,
         folder=folder,
         machine=machine,
+        session=session,
     )
 
     with json_socket(socket_file) as stream:

@@ -24,11 +24,13 @@ function before {
 function after {
     local exit_code=$?
     if [[ -v osh_current_command ]]; then
+        osh_session=${osh_session:-$(uuidgen)}
         osh_current_command+=(
             $(date +%s)  # end time
             $exit_code  # exit code
             $(pwd)  # folder
             $(hostname)  # machine
+            $osh_session  # session
         )
         run -m osh.socket insert-event $osh_current_command &!
         unset osh_current_command
