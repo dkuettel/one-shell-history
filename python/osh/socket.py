@@ -3,6 +3,8 @@ from contextlib import contextmanager
 import json
 import socket
 import io
+import subprocess
+import datetime
 
 import click
 
@@ -17,7 +19,7 @@ def cli():
 
 
 @cli.command()
-def server():
+def serve():
 
     history = osh.history.FromFile()
 
@@ -25,27 +27,79 @@ def server():
         while True:
             with accept() as stream:
                 message = stream.read()
-                if message["command"] == "add_event":
-                    print(message["arguments"])
+                if message["command"] == "insert_event":
+                    event = osh.history.Event.from_json_dict(message["event"])
+                    with history.edit():
+                        history.insert_event(event)
                 elif message["command"] == "list_events":
                     with history.edit():
-                        for event in history.events:
-                            stream.write(event.command)
-                        stream.write(0)
+                        try:
+                            for event in reversed(history.events):
+                                import time
+
+                                time.sleep(0.1)
+                                stream.write(event.command)
+                            stream.write(0)
+                        except:
+                            pass
                 else:
                     assert False
 
 
 @cli.command()
-def client():
+@click.argument("starttime", type=int)
+@click.argument("command", type=str)
+@click.argument("endtime", type=int)
+@click.argument("exit_code", type=int)
+@click.argument("folder", type=str)
+@click.argument("machine", type=str)
+def insert_event(starttime, command, endtime, exit_code, folder, machine):
+
+    starttime = datetime.datetime.fromtimestamp(starttime, tz=datetime.timezone.utc)
+    endtime = datetime.datetime.fromtimestamp(endtime, tz=datetime.timezone.utc)
+
+    event = osh.history.Event(
+        timestamp=starttime,
+        command=command,
+        duration=(endtime - starttime).total_seconds(),
+        exit_code=exit_code,
+        folder=folder,
+        machine=machine,
+    )
 
     with json_socket(socket_file) as stream:
+        stream.write({"command": "insert_event", "event": event.to_json_dict()})
+
+
+@cli.command()
+def fzf_select():
+    with json_socket(socket_file) as stream:
         stream.write({"command": "list_events"})
-        while True:
-            event = stream.read()
-            if event == 0:
-                break
-            print(event)
+        with subprocess.Popen(
+            args=["fzf"], stdin=subprocess.PIPE, stdout=subprocess.PIPE
+        ) as fzf:
+            history = []
+            while fzf.poll() is None:
+                event = stream.read()
+                if event == 0:
+                    break
+                try:
+                    fzf.stdin.write(
+                        (
+                            f"{len(history)} # " + event.replace("\n", "...") + "\n"
+                        ).encode("utf-8")
+                    )
+                    fzf.stdin.flush()
+                    history.append(event)
+                except:
+                    break
+            try:
+                fzf.stdin.close()
+            except:
+                pass
+            fzf.wait()
+            selection = int(fzf.stdout.read().decode("utf-8").split(" ", maxsplit=1)[0])
+            print(history[selection])
 
 
 @contextmanager
@@ -63,7 +117,10 @@ def json_socketserver(socket_file: Path):
                     try:
                         yield stream
                     finally:
-                        stream.close()
+                        try:
+                            stream.close()
+                        except:
+                            pass
 
             yield accept
     finally:
@@ -83,6 +140,7 @@ def json_socket(socket_file: Path):
 
 
 class JsonStream:
+    # todo stream will block stuff if it receives unfinished lines but not EOF? some timeout or something?
     def __init__(self, stream):
         self.stream = io.TextIOWrapper(stream)
 

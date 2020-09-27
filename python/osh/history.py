@@ -77,3 +77,7 @@ class FromFile:
         yield
         write_to_file(self.events, self.filename)
         self.events = None
+
+    def insert_event(self, event: Event):
+        assert self.events is not None
+        self.events = merge([self.events, [event]])

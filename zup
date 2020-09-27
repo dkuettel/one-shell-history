@@ -21,7 +21,7 @@ function after {
             $(pwd)  # folder
             $(hostname)  # machine
         )
-        pipenv run python -m osh.zsh add $osh_current_command &>/dev/null &!
+        pipenv run python -m osh.socket insert-event $osh_current_command &>/dev/null &!
         osh_current_command=
     fi
 }
@@ -46,8 +46,9 @@ add-zsh-hook precmd after
 #}
 
 function osh-search {
-    selection=$(pipenv run python -m osh.zsh ls 2>/dev/null | fzf)
-    BUFFER=$(pipenv run python -m osh.zsh get $selection 2>/dev/null)
+    #selection=$(pipenv run python -m osh.zsh ls 2>/dev/null | fzf)
+    #BUFFER=$(pipenv run python -m osh.zsh get $selection 2>/dev/null)
+    BUFFER=$(pipenv run python -m osh.socket fzf-select | tail -n +1)
     CURSOR=$#BUFFER
 }
 
