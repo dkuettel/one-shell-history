@@ -100,8 +100,11 @@ def fzf_select():
             except:
                 pass
             fzf.wait()
-            selection = int(fzf.stdout.read().decode("utf-8").split(" ", maxsplit=1)[0])
-            print(history[selection])
+            try:
+                selection = int(fzf.stdout.read().decode("utf-8").split(" ", maxsplit=1)[0])
+                print(history[selection])
+            except:
+                pass
 
 
 @contextmanager
