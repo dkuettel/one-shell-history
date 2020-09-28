@@ -84,16 +84,22 @@ def write_to_file(history: List[Event], file: Path):
 
 @dataclass
 class FromFile:
-    filename: Path = Path("zsh-history.json")
+    file: Path = Path("zsh-history.json")
     events: Optional[List[Event]] = None
 
     @contextmanager
-    def edit(self):
+    def lock(self):
+        from osh.utils import locked_file
+
         assert self.events is None
-        self.events = read_from_file(self.filename, or_empty=True)
-        yield
-        write_to_file(self.events, self.filename)
-        self.events = None
+
+        with locked_file(self.file, wait=10):
+            self.events = read_from_file(self.file, or_empty=True)
+            try:
+                yield
+                write_to_file(self.events, self.file)
+            finally:
+                self.events = None
 
     def insert_event(self, event: Event):
         assert self.events is not None
