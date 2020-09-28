@@ -71,8 +71,10 @@ def cli():
 @cli.command()
 @click.option("--zsh-file", default="~/.zsh_history")
 @click.option("--machine", required=True)
-@click.option("--osh-file", default="zsh-history.json")
+@click.option("--osh-file", default="~/.one-shell-history/events.json")
 def zsh(zsh_file, machine, osh_file):
+
+    from osh.utils import locked_file
 
     zsh_file = Path(zsh_file).expanduser()
     osh_file = Path(osh_file).expanduser()
@@ -86,7 +88,8 @@ def zsh(zsh_file, machine, osh_file):
         f"{len(merged)-len(osh_history)} out of {len(zsh_history)} in zsh are new to osh"
     )
 
-    osh.history.write_to_file(merged, osh_file)
+    with locked_file(osh_file, wait=10):
+        osh.history.write_to_file(merged, osh_file)
 
 
 if __name__ == "__main__":

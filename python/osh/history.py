@@ -12,7 +12,7 @@ from functools import total_ordering
 class Event:
     timestamp: datetime.datetime
     command: str
-    duration: Optional[int] = None
+    duration: Optional[float] = None
     exit_code: Optional[int] = None
     folder: Optional[str] = None
     machine: Optional[str] = None
@@ -79,12 +79,13 @@ def read_from_file(file: Path, or_empty: bool = False) -> List[Event]:
 def write_to_file(history: List[Event], file: Path):
     json_dict = [event.to_json_dict() for event in history]
     json_str = json.dumps(json_dict, indent=2)
+    file.parent.mkdir(parents=True, exist_ok=True)
     file.write_text(json_str)
 
 
 @dataclass
 class FromFile:
-    file: Path = Path("zsh-history.json")
+    file: Path = Path("~/.one-shell-history/events.json").expanduser()
     events: Optional[List[Event]] = None
 
     @contextmanager

@@ -29,10 +29,10 @@ def serve():
                 message = stream.read()
                 if message["command"] == "insert_event":
                     event = osh.history.Event.from_json_dict(message["event"])
-                    with history.edit():
+                    with history.lock():
                         history.insert_event(event)
                 elif message["command"] == "list_events":
-                    with history.edit():
+                    with history.lock():
                         try:
                             for event in osh.history.generate_pruned_for_search(
                                 history.events
