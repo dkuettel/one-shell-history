@@ -1,0 +1,11 @@
+[Unit]
+Description=one-shell-history service
+
+[Service]
+Type=simple
+User=%i
+ExecStart=/home/dkuettel/toys/one-shell-history/systemd/ExecStart
+ExecStop=/home/dkuettel/toys/one-shell-history/systemd/ExecStop
+
+[Install]
+WantedBy=multi-user.target

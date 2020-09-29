@@ -1,0 +1,9 @@
+#!/bin/zsh
+set -eux -o pipefail
+
+whoami
+
+if [[ -v MAINPID ]]; then
+    (echo '{"command": "exit"}' | nc -UN ~/.one-shell-history/control-socket) || echo 'control-socket failure'
+    tail --pid $MAINPID -f /dev/null
+fi

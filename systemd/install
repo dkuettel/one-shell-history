@@ -1,0 +1,16 @@
+#!/bin/zsh
+set -eux -o pipefail
+
+# install into systemd, idempotent
+# for the current user (dont run with sudo)
+
+if [[ $USER == 'root' ]]; then
+    echo 'not meant to be installed as a service for user root'
+    exit 1
+fi
+
+base=${0:a:h}
+sudo ln -sfT $base/one-shell-history@.service /etc/systemd/system/one-shell-history@$USER.service
+sudo systemctl daemon-reload  # is this the way to make it load newly added services?
+sudo systemctl enable one-shell-history@$USER.service
+sudo systemctl start one-shell-history@$USER.service
