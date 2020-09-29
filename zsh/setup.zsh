@@ -40,7 +40,11 @@ function __osh_after {
             $(hostname)  # machine
             $__osh_session  # session
         )
-        __osh_run -m osh.socket insert-event $__osh_current_command &!
+        if [[ -e ~/.one-shell-history/control-socket ]]; then
+            __osh_run -m osh.socket insert-event $__osh_current_command &!
+        else
+            print -P '\n%F{1}%Sthe osh service doesnt seem to be running%s%f'
+        fi
         unset __osh_current_command
     fi
 }
@@ -49,9 +53,11 @@ add-zsh-hook zshaddhistory __osh_before
 add-zsh-hook precmd __osh_after
 
 function __osh_search {
-    BUFFER=$(__osh_run -m osh.socket fzf-select)
-    CURSOR=$#BUFFER
-    zle reset-prompt
+    if [[ -e ~/.one-shell-history/control-socket ]]; then
+        BUFFER=$(__osh_run -m osh.socket fzf-select)
+        CURSOR=$#BUFFER
+        zle reset-prompt
+    fi
 }
 
 zle -N __osh_search
