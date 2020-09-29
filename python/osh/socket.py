@@ -10,7 +10,7 @@ import click
 
 import osh.history
 
-socket_file = Path("control-socket")
+socket_file = Path("~/.one-shell-history/control-socket").expanduser()
 
 
 @click.group()
@@ -41,6 +41,8 @@ def serve():
                             stream.write(0)
                         except:
                             pass
+                elif message["command"] == "exit":
+                    break
                 else:
                     assert False
 
