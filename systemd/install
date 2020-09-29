@@ -9,8 +9,8 @@ if [[ $USER == 'root' ]]; then
     exit 1
 fi
 
-base=${0:a:h}
-sudo ln -sfT $base/one-shell-history@.service /etc/systemd/system/one-shell-history@$USER.service
+export base=${0:a:h}
+cat $base/one-shell-history@.service | envsubst | sudo tee /etc/systemd/system/one-shell-history@$USER.service
 sudo systemctl daemon-reload  # is this the way to make it load newly added services?
 sudo systemctl enable one-shell-history@$USER.service
 sudo systemctl start one-shell-history@$USER.service
