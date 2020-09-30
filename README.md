@@ -17,6 +17,8 @@
 5) check if the service is running
    > systemctl status one-shell-history@$USER.service
 6) either `source zsh/setup.zsh` in your zshrc or source it manually to test
+   note that this only adds osh, it doesnt not disable any other history mechanism
+   the normal zsh history (typically `~/.zsh_history`) is still running in parallel
 
 ## usage
 
