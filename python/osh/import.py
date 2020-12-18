@@ -24,9 +24,9 @@ def read_zsh_history(file: Path, machine: Optional[str] = None) -> List[Event]:
             print(f"cannot parse line {line} = {content.strip()}")
             continue
         timestamp = datetime.datetime.fromtimestamp(
-            int(match.group("timestamp")), tz=datetime.timezone.utc
+            int(match["timestamp"]), tz=datetime.timezone.utc
         )
-        command = match.group("command")
+        command = match["command"]
         # note: duration in my zsh version 5.8 doesnt seem to be recorded correctly, its always 0
         # duration = int(match.group("duration"))
         while command.endswith("\\"):
