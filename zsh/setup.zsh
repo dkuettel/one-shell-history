@@ -36,8 +36,8 @@ function __osh_after {
         __osh_current_command+=(
             $(date +%s)  # end time
             $exit_code  # exit code
-            $(pwd)  # folder
-            $(hostname)  # machine
+            "$(pwd)"  # folder TODO should get it before, not after, some commands change the pwd
+            "$(hostname)"  # machine
             $__osh_session  # session
         )
         if [[ -e ~/.one-shell-history/control-socket ]]; then
