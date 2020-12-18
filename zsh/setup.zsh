@@ -23,8 +23,9 @@ function __osh_before {
     local command=${1[0,-2]}
     if [[ $command != '' ]]; then
         __osh_current_command=(
-            $(date +%s)  # start time
-            $command  # command
+            --starttime $(date +%s)
+            --command $command
+            --folder "$(pwd)"
         )
     fi
 }
@@ -34,11 +35,10 @@ function __osh_after {
     if [[ -v __osh_current_command ]]; then
         __osh_session=${__osh_session:-$(uuidgen)}
         __osh_current_command+=(
-            $(date +%s)  # end time
-            $exit_code  # exit code
-            "$(pwd)"  # folder TODO should get it before, not after, some commands change the pwd
-            "$(hostname)"  # machine
-            $__osh_session  # session
+            --endtime $(date +%s)
+            --exit-code $exit_code
+            --machine "$(hostname)"
+            --session $__osh_session
         )
         if [[ -e ~/.one-shell-history/control-socket ]]; then
             __osh_run -m osh.socket insert-event $__osh_current_command &!

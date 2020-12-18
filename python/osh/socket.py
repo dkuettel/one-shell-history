@@ -48,13 +48,13 @@ def serve():
 
 
 @cli.command()
-@click.argument("starttime", type=int)
-@click.argument("command", type=str)
-@click.argument("endtime", type=int)
-@click.argument("exit_code", type=int)
-@click.argument("folder", type=str)
-@click.argument("machine", type=str)
-@click.argument("session", type=str)
+@click.option("--starttime", type=int, required=True)
+@click.option("--command", type=str, required=True)
+@click.option("--endtime", type=int, required=True)
+@click.option("--exit-code", type=int, required=True)
+@click.option("--folder", type=str, required=True)
+@click.option("--machine", type=str, required=True)
+@click.option("--session", type=str, required=True)
 def insert_event(starttime, command, endtime, exit_code, folder, machine, session):
 
     starttime = datetime.datetime.fromtimestamp(starttime, tz=datetime.timezone.utc)
