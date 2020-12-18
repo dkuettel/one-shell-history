@@ -13,7 +13,7 @@ class NoLock(Exception):
 
 @contextmanager
 def locked_file(file: Path, wait: Optional[float] = None, forever: bool = False):
-    """ lazy lockfile implementation, not sure if absolutely failsafe
+    """lazy lockfile implementation, not sure if absolutely failsafe
     file is the original file to be locked, ".lock" is appended automatically
     """
 

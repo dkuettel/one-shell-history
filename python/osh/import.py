@@ -41,7 +41,7 @@ def read_zsh_history(file: Path, machine: Optional[str] = None) -> List[Event]:
 def merge_zsh_into_osh(
     zsh_history: List[Event], osh_history: List[Event], timestamp_slack: float = 1.5
 ) -> List[Event]:
-    """ merge a zsh history into an osh history
+    """merge a zsh history into an osh history
     taking special care to match double entries
         a) previously imported entries are trivial, they are exactly the same
         b) recorded by both zsh and osh are more difficult and matched with a heuristic
