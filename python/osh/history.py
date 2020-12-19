@@ -4,11 +4,9 @@ import datetime
 import json
 from pathlib import Path
 from contextlib import contextmanager
-from functools import total_ordering
 
 
-@total_ordering
-@dataclass(frozen=True)
+@dataclass(frozen=True, order=True)
 class Event:
     timestamp: datetime.datetime
     command: str
@@ -46,19 +44,6 @@ class Event:
         jd = dict(jd)
         jd["timestamp"] = datetime.datetime.fromisoformat(jd["timestamp"])
         return cls(**jd)
-
-    def __lt__(self, other):
-        assert type(self) is Event
-        assert type(other) is Event
-        for a, b in zip(astuple(self), astuple(other)):
-            if a != b:
-                # we make None < anything else
-                if a is None:
-                    return True
-                if b is None:
-                    return False
-                return a < b
-        return False
 
 
 def make(events: Iterable[Event]) -> List[Event]:
