@@ -33,14 +33,13 @@ def serve():
                         history.insert_event(event)
                 elif message["command"] == "list_events":
                     with history.lock():
-                        try:
-                            for event in osh.history.generate_pruned_for_search(
-                                history.events
-                            ):
-                                stream.write(event.command)
-                            stream.write(0)
-                        except:
-                            pass
+                        events = history.events
+                    try:
+                        for event in events:
+                            stream.write(event.command)
+                        stream.write(0)
+                    except:
+                        pass
                 elif message["command"] == "exit":
                     break
                 else:
