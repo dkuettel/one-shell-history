@@ -10,7 +10,14 @@ if [[ $USER == 'root' ]]; then
 fi
 
 export base=${0:a:h}
-cat $base/one-shell-history@.service | envsubst | sudo tee /etc/systemd/system/one-shell-history@$USER.service
-sudo systemctl daemon-reload  # is this the way to make it load newly added services?
-sudo systemctl enable one-shell-history@$USER.service
-sudo systemctl start one-shell-history@$USER.service
+cat $base/one-shell-history@.service \
+    | envsubst \
+    | sudo tee /etc/systemd/system/one-shell-history@$USER.service
+
+# TODO daemon-reload doesnt seem to be necessary,
+# it worked for me when both the service file was new or when it was changed
+#sudo systemctl daemon-reload
+
+if ! sudo systemctl enable --now --wait one-shell-history@$USER.service; then
+    sudo systemctl status --no-pager --full one-shell-history@$USER.service
+fi
