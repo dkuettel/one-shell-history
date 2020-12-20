@@ -85,7 +85,7 @@ def zsh(zsh_file, machine, osh_file):
     merged = merge_zsh_into_osh(zsh_history=zsh_history, osh_history=osh_history)
 
     print(
-        f"{len(merged)-len(osh_history)} out of {len(zsh_history)} in zsh are new to osh"
+        f"{len(merged)-len(osh_history)}/{len(zsh_history)} events in {machine}'s native zsh history are new to osh"
     )
 
     with locked_file(osh_file, wait=10):
