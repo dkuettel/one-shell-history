@@ -2,7 +2,8 @@
 Description=one-shell-history service
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=all
 User=%i
 ExecStart=$base/ExecStart
 ExecStop=$base/ExecStop

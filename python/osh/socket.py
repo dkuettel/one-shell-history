@@ -5,6 +5,7 @@ import socket
 import io
 import subprocess
 import datetime
+import os
 
 import click
 
@@ -24,6 +25,7 @@ def serve():
     history = osh.history.FromFile()
 
     with json_socketserver(socket_file) as accept:
+        os.system("systemd-notify --ready")
         while True:
             with accept() as stream:
                 message = stream.read()

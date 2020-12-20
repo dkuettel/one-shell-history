@@ -14,10 +14,8 @@ cat $base/one-shell-history@.service \
     | envsubst \
     | sudo tee /etc/systemd/system/one-shell-history@$USER.service
 
-# TODO daemon-reload doesnt seem to be necessary,
-# it worked for me when both the service file was new or when it was changed
-#sudo systemctl daemon-reload
-
-if ! sudo systemctl enable --now --wait one-shell-history@$USER.service; then
+sudo systemctl daemon-reload
+sudo systemctl enable one-shell-history@$USER.service
+if ! sudo systemctl restart one-shell-history@$USER.service; then
     sudo systemctl status --no-pager --full one-shell-history@$USER.service
 fi
