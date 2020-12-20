@@ -21,6 +21,18 @@ def get_repo():
     return repo
 
 
+setup_help_string = """
+One-shell-history's git sync uses a repository at ~/.one-shell-history/sync/git.
+The local repository has been initialized but needs to be setup with a remote to be useful.
+Make sure that the branch 'master' is set up to pull and push from 'origin/master'.
+Something like:
+> git remote add origin git@github.com:user/one-shell-history-data.git
+> git branch -u origin/master
+Dont forget to configure ssh keys if needed:
+> git config core.sshCommand 'ssh -i ~/.ssh/your-key'
+"""
+
+
 def sync():
 
     from pathlib import Path
@@ -38,19 +50,10 @@ def sync():
         try:
             repo.remotes["origin"].fetch()
         except IndexError:
-            print("git sync uses the repository at ~/.one-shell-history/sync/git")
-            print(
-                "make sure that repo is set up to push to and pull from a remote 'origin'"
-            )
-            print("for master branch tracking a branch on that remote")
-            print("dont forget to set core.sshCommand if you need special ssh keys")
-            print(
-                "often first: 'git remote add origin git@github.com:someone/somewhere.git'"
-            )
-            print("maybe then: 'git config core.sshCommand 'ssh -i ~/.ssh/your-key'")
-            print("and then: 'git push -u origin master'")
+            print(setup_help_string)
             exit(1)
-        repo.head.reset(hard=True)
+        # TODO not sure if that works universally, also hard=True is not documented
+        repo.head.reset(commit="origin/master", hard=True, working_tree=True)
 
         remote_history = osh.history.read_from_file(remote_file, or_empty=True)
 
@@ -74,6 +77,7 @@ def sync():
             repo.index.commit(
                 f"add {len(merged)-len(remote_history)} new events from {socket.gethostname()}"
             )
+            # TODO it could be that somewhere else we pushed from in the mean time and then this will fail
             repo.remotes["origin"].push()
 
 
