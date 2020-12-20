@@ -119,8 +119,9 @@ def fzf_select():
 
 
 @contextmanager
-def json_socketserver(socket_file: Path):
+def json_socketserver(socket_file: Path, parents: bool = True):
     try:
+        socket_file.parent.mkdir(parents=parents, exist_ok=True)
         with socket.socket(family=socket.AF_UNIX, type=socket.SOCK_STREAM) as s:
             s.bind(str(socket_file))
             s.listen(1)
