@@ -6,7 +6,7 @@ from pathlib import Path
 from contextlib import contextmanager
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(frozen=True)
 class Event:
     timestamp: datetime.datetime
     command: str
@@ -47,7 +47,13 @@ class Event:
 
 
 def make(events: Iterable[Event]) -> List[Event]:
-    return sorted(set(events))
+    """
+    this produces the canonical sorting that should be stable
+    if there is a hash collision it might not be completely stable
+    currently we use this as the authority on serialized representation
+    but in the end working with a set would probably be the most robust thing
+    """
+    return sorted(set(events), key=lambda e: (e.timestamp, hash(e)))
 
 
 def merge(histories: List[List[Event]]) -> List[Event]:
