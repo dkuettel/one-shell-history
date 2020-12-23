@@ -105,3 +105,14 @@ def generate_pruned_for_search(history: Iterable[Event]) -> Iterable[Event]:
         if (event.command not in used) and (event.command not in boring):
             used.add(event.command)
             yield event
+
+
+def print_events(events: List[Event]):
+    from tabulate import tabulate
+
+    data = []
+
+    for e in events:
+        data.append([str(e.timestamp), e.command])
+
+    print(tabulate(data, headers=["date", "command"]))

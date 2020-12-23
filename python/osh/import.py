@@ -2,11 +2,12 @@ from pathlib import Path
 import re
 import datetime
 from typing import List, Optional
+from dataclasses import dataclass, field
 
 import click
 
 import osh.history
-from osh.history import Event
+from osh.history import Event, print_events
 
 
 def read_zsh_history(file: Path, machine: Optional[str] = None) -> List[Event]:
@@ -23,6 +24,7 @@ def read_zsh_history(file: Path, machine: Optional[str] = None) -> List[Event]:
         if match is None:
             print(f"cannot parse line {line} = {content.strip()}")
             continue
+        # from what I understand, .zsh_history uses a posix time stamp, utc, second resolution
         timestamp = datetime.datetime.fromtimestamp(
             int(match["timestamp"]), tz=datetime.timezone.utc
         )
@@ -38,29 +40,27 @@ def read_zsh_history(file: Path, machine: Optional[str] = None) -> List[Event]:
     return osh.history.make(history)
 
 
-def merge_zsh_into_osh(
-    zsh_history: List[Event], osh_history: List[Event], timestamp_slack: float = 1.5
+def is_same_event(a: Event, b: Event, slack: float):
+    # TODO do we record the command string exactly the same? escaping and all that?
+    # alternatively compare first timestamp, and if that one is exact,
+    # use loose heuristics with rest
+    return (
+        (a.command == b.command)
+        and (a.machine == b.machine)
+        and (abs((a.timestamp - b.timestamp).total_seconds()) < slack)
+    )
+
+
+def contains_same_event(candidate: Event, events: List[Event], slack: float):
+    return any(is_same_event(candidate, e, slack=slack) for e in events)
+
+
+def find_new_zsh_events(
+    zsh_history: List[Event], osh_history: List[Event], slack: float = 1.5
 ) -> List[Event]:
-    """merge a zsh history into an osh history
-    taking special care to match double entries
-        a) previously imported entries are trivial, they are exactly the same
-        b) recorded by both zsh and osh are more difficult and matched with a heuristic
-    """
-
-    def is_collision(a, b):
-        # todo do we record the command string exactly the same? escaping and all that?
-        return (
-            (a.command == b.command)
-            and (a.machine == b.machine)
-            and (abs((a.timestamp - b.timestamp).total_seconds()) < timestamp_slack)
-        )
-
-    merged = list(osh_history)
-    for candidate in zsh_history:
-        if not any(is_collision(candidate, event) for event in osh_history):
-            merged.append(candidate)
-
-    return osh.history.make(merged)
+    return [
+        e for e in zsh_history if not contains_same_event(e, osh_history, slack=slack)
+    ]
 
 
 @click.group()
@@ -74,6 +74,8 @@ def cli():
 @click.option("--osh-file", default="~/.one-shell-history/events.json")
 def zsh(zsh_file, machine, osh_file):
 
+    # TODO could import also cleanup earlier mistakes maybe?
+
     from osh.utils import locked_file
 
     zsh_file = Path(zsh_file).expanduser()
@@ -82,11 +84,14 @@ def zsh(zsh_file, machine, osh_file):
     zsh_history = read_zsh_history(file=zsh_file, machine=machine)
     osh_history = osh.history.read_from_file(osh_file)
 
-    merged = merge_zsh_into_osh(zsh_history=zsh_history, osh_history=osh_history)
+    news = find_new_zsh_events(zsh_history=zsh_history, osh_history=osh_history)
 
-    print(
-        f"{len(merged)-len(osh_history)}/{len(zsh_history)} events in {machine}'s native zsh history are new to osh"
-    )
+    print_events(news)
+    print()
+
+    click.confirm("Add these new events from zsh to osh?", abort=True)
+
+    merged = osh.history.merge([osh_history, news])
 
     with locked_file(osh_file, wait=10):
         osh.history.write_to_file(merged, osh_file)
