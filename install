@@ -1,0 +1,12 @@
+#!/bin/zsh
+set -eux -o pipefail
+
+# (re)install, idempotent
+# run as user, not as root (no sudo)
+
+cd ${0:a:h}
+
+export PIPENV_VENV_IN_PROJECT=1
+pipenv install
+
+systemd/install
