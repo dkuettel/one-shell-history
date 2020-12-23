@@ -9,6 +9,7 @@ verify_ssl = true
 click = "*"
 gitpython = "*"
 ipython = "*"
+tabulate = "*"
 
 [requires]
 python_version = "3.8"
