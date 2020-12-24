@@ -98,13 +98,37 @@ class FromFile:
         self.events = merge([self.events, [event]])
 
 
-def generate_pruned_for_search(history: Iterable[Event]) -> Iterable[Event]:
+@dataclass
+class AggregatedEvent:
+    most_recent_timestamp: datetime.datetime
+    command: str
+    occurence_count: int
+    failed_count: int
+
+
+def aggregate_events_for_search(events: Iterable[Event]) -> Iterable[AggregatedEvent]:
+    # TODO efficient enough? can really yield because stats are not ready before the end
+    # also if we reverse, then Iterable is not really useful
     boring = {"ls", "lr", "ll", "htop", "v"}
-    used = set()
-    for event in reversed(history):
-        if (event.command not in used) and (event.command not in boring):
-            used.add(event.command)
-            yield event
+    order = []
+    aggregated_events = dict()
+    for event in reversed(events):
+        if event.command in boring:
+            continue
+        if event.command in aggregated_events:
+            aggregated_event = aggregated_events[event.command]
+            aggregated_event.occurence_count += 1
+            if event.exit_code not in {0, None}:
+                aggregated_event.failed_count += 1
+        else:
+            order.append(event.command)
+            aggregated_events[event.command] = AggregatedEvent(
+                most_recent_timestamp=event.timestamp,
+                command=event.command,
+                occurence_count=1,
+                failed_count=0 if event.exit_code in {0, None} else 1,
+            )
+    return [aggregated_events[i] for i in order]
 
 
 def print_events(events: List[Event]):

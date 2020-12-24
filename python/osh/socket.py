@@ -36,9 +36,22 @@ def serve():
                 elif message["command"] == "list_events":
                     with history.lock():
                         events = history.events
+                    now = datetime.datetime.now(datetime.timezone.utc)
                     try:
-                        for event in events:
-                            stream.write(event.command)
+                        for i, event in enumerate(
+                            osh.history.aggregate_events_for_search(events)
+                        ):
+                            when = now - event.most_recent_timestamp
+                            when = datetime.timedelta(
+                                seconds=round(when.total_seconds())
+                            )
+                            stream.write(
+                                dict(
+                                    id=i,
+                                    info=f"[{str(when)} ago] [{event.failed_count}/{event.occurence_count} failed]",
+                                    command=event.command,
+                                )
+                            )
                         stream.write(0)
                     except:
                         pass
@@ -82,28 +95,34 @@ def fzf_select():
         with subprocess.Popen(
             args=[
                 "fzf",
-                "--reverse",
-                "--height=50%",
-                "--nth=2..",
-                "--preview-window=down:8:wrap",
-                "--preview=echo {}",
+                # "--query={todo}",  # TODO
+                "--delimiter= --- ",
+                "--with-nth=3..",  # what to display (and search)
+                "--height=70%",
+                "--min-height=10",
+                "--layout=reverse",
+                "--prompt=> ",
+                "--preview-window=down:10:wrap",
+                "--preview=echo {2}; echo {3..}",
             ],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
         ) as fzf:
-            history = []
+            history = dict()
             while fzf.poll() is None:
                 event = stream.read()
                 if event == 0:
                     break
                 try:
+                    # TODO not sure if i make all commands save with no new lines here
+                    command = event["command"].replace("\n", "↪")
                     fzf.stdin.write(
-                        (
-                            f"{len(history)} # " + event.replace("\n", "...") + "\n"
-                        ).encode("utf-8")
+                        f"{event['id']} --- {event['info']} --- {command}\n".encode(
+                            "utf-8"
+                        )
                     )
                     fzf.stdin.flush()
-                    history.append(event)
+                    history[event["id"]] = event
                 except:
                     break
             try:
@@ -113,9 +132,9 @@ def fzf_select():
             fzf.wait()
             try:
                 selection = int(
-                    fzf.stdout.read().decode("utf-8").split(" ", maxsplit=1)[0]
+                    fzf.stdout.read().decode("utf-8").split(" --- ", maxsplit=1)[0]
                 )
-                print(history[selection])
+                print(history[selection]["command"])
             except:
                 pass
 
