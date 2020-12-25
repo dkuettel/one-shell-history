@@ -89,13 +89,14 @@ def insert_event(starttime, command, endtime, exit_code, folder, machine, sessio
 
 
 @cli.command()
-def fzf_select():
+@click.option("--query", default="")
+def fzf_select(query):
     with json_socket(socket_file) as stream:
         stream.write({"command": "list_events"})
         with subprocess.Popen(
             args=[
                 "fzf",
-                # "--query={todo}",  # TODO
+                f"--query={query}",
                 "--delimiter= --- ",
                 "--with-nth=3..",  # what to display (and search)
                 "--height=70%",

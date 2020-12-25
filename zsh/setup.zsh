@@ -54,7 +54,7 @@ add-zsh-hook precmd __osh_after
 
 function __osh_search {
     if [[ -e ~/.one-shell-history/control-socket ]]; then
-        BUFFER=$(__osh_run -m osh.socket fzf-select)
+        BUFFER=$(__osh_run -m osh.socket fzf-select --query=$BUFFER)
         CURSOR=$#BUFFER
         zle reset-prompt
     fi
