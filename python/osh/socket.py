@@ -25,7 +25,10 @@ def serve():
     history = osh.history.FromFile()
 
     with json_socketserver(socket_file) as accept:
-        os.system("systemd-notify --ready")
+
+        if os.system("systemd-notify --ready") != 0:
+            raise Exception("could not notify systemd about readyness")
+
         while True:
             with accept() as stream:
                 message = stream.read()
