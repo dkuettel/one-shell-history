@@ -22,7 +22,7 @@ def cli():
 @cli.command()
 def serve():
 
-    history = osh.history.FromFile()
+    history = osh.history.EagerHistory()
 
     with json_socketserver(socket_file) as accept:
 
@@ -34,11 +34,9 @@ def serve():
                 message = stream.read()
                 if message["command"] == "insert_event":
                     event = osh.history.Event.from_json_dict(message["event"])
-                    with history.lock():
-                        history.insert_event(event)
+                    history.insert_event(event)
                 elif message["command"] == "list_events":
-                    with history.lock():
-                        events = history.events
+                    events = history.as_list()
                     now = datetime.datetime.now(datetime.timezone.utc)
                     try:
                         for i, event in enumerate(

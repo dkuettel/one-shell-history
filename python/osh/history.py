@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from contextlib import contextmanager
 
+from osh.utils import locked_file
+
 
 @dataclass(frozen=True)
 class Event:
@@ -140,3 +142,47 @@ def print_events(events: List[Event]):
         data.append([str(e.timestamp), e.command])
 
     print(tabulate(data, headers=["date", "command"]))
+
+
+@dataclass
+class EagerHistory:
+    file: Path = Path("~/.one-shell-history/events.json").expanduser()
+
+    def _lock(self):
+        return locked_file(self.file, wait=10)
+
+    def insert_event(self, event: Event):
+        with self._lock():
+            events = read_from_file(self.file, or_empty=True)
+            events.append(event)
+            events = make(events)
+            write_to_file(events, self.file)
+
+    def as_list(self) -> List[Event]:
+        with self._lock():
+            events = read_from_file(self.file, or_empty=True)
+        return events
+
+
+@dataclass
+class LazyHistory:
+    file: Path = Path("~/.one-shell-history/events.json").expanduser()
+
+    def __post_init__(self):
+        with self._lock():
+            self._events = read_from_file(self.file, or_empty=True)
+
+    def _lock(self):
+        return locked_file(self.file, wait=10)
+
+    def insert_event(self, event: Event):
+        self._events = merge([self._events, [event]])
+
+    def as_list(self) -> List[Event]:
+        return list(self._events)
+
+    def sync(self):
+        with self._lock():
+            disk = read_from_file(self.file, or_empty=True)
+            self._events = merge([self._events, disk])
+            write_to_file(self._events, self.file)
