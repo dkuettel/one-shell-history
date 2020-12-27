@@ -1,23 +1,23 @@
-import os
-import json
-import socket
 import io
+import json
+import os
+import socket
 import subprocess
-from pathlib import Path
-from dataclasses import dataclass
 from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Iterable, Optional
-from datetime import datetime, timezone, timedelta
 
 import click
 
 from osh.history import (
-    History,
-    LazyHistory,
+    AggregatedEvent,
     EagerHistory,
     Event,
+    History,
+    LazyHistory,
     aggregate_events_for_search,
-    AggregatedEvent,
 )
 
 

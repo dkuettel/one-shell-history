@@ -35,8 +35,8 @@ Dont forget to configure ssh keys if needed:
 
 def sync():
 
-    from pathlib import Path
     import socket
+    from pathlib import Path
 
     import osh.history
     from osh.utils import locked_file

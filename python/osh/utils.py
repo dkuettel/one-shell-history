@@ -1,10 +1,10 @@
+import math
+import os
+import random
+import time
 from contextlib import contextmanager
 from pathlib import Path
-import os
 from typing import Optional
-import time
-import math
-import random
 
 
 class NoLock(Exception):

@@ -18,7 +18,7 @@ def insert_event(starttime, command, endtime, exit_code, folder, machine, sessio
 
     from datetime import datetime, timezone
 
-    from osh.history import Event, EagerHistory
+    from osh.history import EagerHistory, Event
 
     starttime = datetime.fromtimestamp(starttime, tz=timezone.utc)
     endtime = datetime.fromtimestamp(endtime, tz=timezone.utc)
