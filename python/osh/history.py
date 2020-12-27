@@ -107,6 +107,22 @@ class AggregatedEvent:
     occurence_count: int
     failed_count: int
 
+    def to_json_dict(self):
+        return dict(
+            most_recent_timestamp=self.most_recent_timestamp.isoformat(),
+            command=self.command,
+            occurence_count=self.occurence_count,
+            failed_count=self.failed_count,
+        )
+
+    @classmethod
+    def from_json_dict(cls, jd):
+        jd = dict(jd)
+        jd["most_recent_timestamp"] = datetime.datetime.fromisoformat(
+            jd["most_recent_timestamp"]
+        )
+        return cls(**jd)
+
 
 def aggregate_events_for_search(events: Iterable[Event]) -> Iterable[AggregatedEvent]:
     # TODO efficient enough? can really yield because stats are not ready before the end
@@ -144,8 +160,12 @@ def print_events(events: List[Event]):
     print(tabulate(data, headers=["date", "command"]))
 
 
+class History:
+    pass
+
+
 @dataclass
-class EagerHistory:
+class EagerHistory(History):
     file: Path = Path("~/.one-shell-history/events.json").expanduser()
 
     def _lock(self):
@@ -165,7 +185,7 @@ class EagerHistory:
 
 
 @dataclass
-class LazyHistory:
+class LazyHistory(History):
     file: Path = Path("~/.one-shell-history/events.json").expanduser()
 
     def __post_init__(self):

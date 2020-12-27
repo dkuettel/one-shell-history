@@ -41,7 +41,7 @@ function __osh_after {
             --session $__osh_session
         )
         if [[ -e ~/.one-shell-history/control-socket ]]; then
-            __osh_run -m osh.socket insert-event $__osh_current_command &!
+            __osh_run -m osh.cli.service insert-event $__osh_current_command &!
         else
             print -P '\n%F{1}%Sthe osh service doesnt seem to be running%s%f'
         fi
@@ -54,7 +54,7 @@ add-zsh-hook precmd __osh_after
 
 function __osh_search {
     if [[ -e ~/.one-shell-history/control-socket ]]; then
-        BUFFER=$(__osh_run -m osh.socket fzf-select --query=$BUFFER)
+        BUFFER=$(__osh_run -m osh.cli.service fzf-select --query=$BUFFER)
         CURSOR=$#BUFFER
         zle reset-prompt
     fi
