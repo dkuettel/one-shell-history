@@ -236,6 +236,8 @@ class Server:
                 pass
             finally:
                 self.history.sync()
+                print("history synced before exiting", flush=True)
+        print("control socket removed before exiting", flush=True)
 
     def handle(self, stream):
         message = stream.read()
@@ -244,15 +246,21 @@ class Server:
     def handle_insert_event(self, stream, message):
         event = Event.from_json_dict(message["event"])
         self.history.insert_event(event)
+        event_command = event.command.replace("\n", "\\n")
+        print(f"insert event {event_command}", flush=True)
 
     def handle_list_events(self, stream, message):
         events = self.history.as_list()
         events = aggregate_events_for_search(events)
+        count = 0
         for event in events:
             stream.write(event.to_json_dict())
+            count += 1
         stream.write(None)
+        print(f"list events, count={count}", flush=True)
 
     def handle_exit(self, stream, message):
+        print("exit")
         raise Exit()
 
 

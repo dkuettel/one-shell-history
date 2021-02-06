@@ -202,7 +202,12 @@ class LazyHistory(History):
         return list(self._events)
 
     def sync(self):
+        print("start lazy sync ...", flush=True)
         with self._lock():
             disk = read_from_file(self.file, or_empty=True)
+            disk_count_before = len(disk)
             self._events = merge([self._events, disk])
             write_to_file(self._events, self.file)
+            disk_count_after = len(self._events)
+            disk_count_added = disk_count_after - disk_count_before
+        print(f"... lazy sync done, {disk_count_added} events added", flush=True)
