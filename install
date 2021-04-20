@@ -4,9 +4,14 @@ set -eux -o pipefail
 # (re)install, idempotent
 # run as user, not as root (no sudo)
 
-cd ${0:a:h}
+base=${0:a:h}
+cd $base
 
-export PIPENV_VENV_IN_PROJECT=1
-pipenv install
+(
+    virtualenv --python python3.8 $base/.venv
+    path=($base/.venv/bin $path)
+    pip install --upgrade pip pip-tools
+    pip-sync
+)
 
 systemd/install
