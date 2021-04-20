@@ -61,7 +61,9 @@ function __osh_search {
 }
 
 zle -N __osh_search
-bindkey '^e' __osh_search
+bindkey '^r' __osh_search
+bindkey -M vicmd '^r' __osh_search
+bindkey -M viins '^r' __osh_search
 
 function osh-sync-zsh {
     # merge in zsh history into osh history (one way)
