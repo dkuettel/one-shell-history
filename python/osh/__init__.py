@@ -71,10 +71,14 @@ class History:
         with self._history_lock:
             events = self._history.as_list()
         events = aggregate_events_for_search(events)
-        for index, event in enumerate(events):
-            yield event
-        count = index + 1
-        print(f"list events, count={count}", flush=True)
+        return events
+
+    def list_session_backwards(self, session: str) -> Iterable[Event]:
+        with self._history_lock:
+            events = self._history.as_list()
+        events = reversed(events)
+        events = (e for e in events if e.session == session)
+        return events
 
     def close(self):
         with self._history_lock:

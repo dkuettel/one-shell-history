@@ -45,10 +45,10 @@ def direct(ctx):
     @contextmanager
     def make_history():
         try:
-            history = History(history=LazyHistory(file=ctx.obj.events))
+            history = History(history=LazyHistory(file=ctx.obj.events_path))
             yield history
         finally:
-            osh.close()
+            history.close()
 
     ctx.obj.make_history = make_history
 
@@ -184,6 +184,76 @@ def fzf_select(ctx, query):
             # TODO does that take care of all types of new lines, or other dangerous characters for fzf?
 
             fzf_line = f"{index} --- {fzf_info} --- {fzf_command}\n"
+            fzf_line = fzf_line.encode("utf-8")
+            fzf.stdin.write(fzf_line)
+
+            fzf.stdin.flush()
+        try:
+            # TODO maybe that only needs to happen in the for else case?
+            fzf.stdin.close()
+        except:
+            pass
+        fzf.wait()
+        try:
+            selection = fzf.stdout.read().decode("utf-8")
+            selection = selection.split(" --- ", maxsplit=1)[0]
+            selection = int(selection)
+            # TODO not sure what happens with the dangling new-line here and how zsh treats it when assigning to BUFFER
+            print(event_by_index[selection].command)
+        except:
+            pass
+
+
+@commands
+@click.option("--session", required=True)
+@click.pass_context
+def fzf_select_session_backwards(ctx, session):
+
+    with ctx.obj.make_history() as history:
+        events = history.list_session_backwards(session)
+
+    now = datetime.now(tz=timezone.utc)
+
+    query = ""
+    with subprocess.Popen(
+        args=[
+            "fzf",
+            f"--query={query}",
+            "--delimiter= --- ",
+            "--with-nth=3..",  # what to display (and search)
+            "--nth=2..",  # what to search in the displayed part
+            "--height=70%",
+            "--min-height=10",
+            "--layout=default",
+            "--prompt=> ",
+            "--preview-window=down:10:wrap",
+            "--preview=echo {2}; echo {4..}",
+            "--tiebreak=index",
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+    ) as fzf:
+
+        event_by_index = []
+
+        for index, event in enumerate(events):
+
+            if fzf.poll() is not None:
+                break
+
+            event_by_index.append(event)
+
+            fzf_ago = round((now - event.timestamp).total_seconds())
+
+            fzf_info = f"[{fzf_ago}s ago] [exit={event.exit_code}]"
+
+            # escape literal \ followed by an n so they are not expanded to a new line by fzf's preview
+            fzf_command = event.command.replace("\\n", "\\\\n")
+            # escape actual new lines so they are expanded to a new line by fzf's preview
+            fzf_command = fzf_command.replace("\n", "\\n")
+            # TODO does that take care of all types of new lines, or other dangerous characters for fzf?
+
+            fzf_line = f"{index} --- {fzf_info} --- {index+1:#2d}# {fzf_ago:#4d}s --- {fzf_command}\n"
             fzf_line = fzf_line.encode("utf-8")
             fzf.stdin.write(fzf_line)
 

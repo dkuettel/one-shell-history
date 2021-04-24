@@ -69,6 +69,20 @@ bindkey '^r' __osh_search
 bindkey -M vicmd '^r' __osh_search
 bindkey -M viins '^r' __osh_search
 
+function __osh_session_backwards {
+    if [[ -e ~/.one-shell-history/service.socket ]]; then
+        __osh_session=${__osh_session:-$(uuidgen)}
+        BUFFER=$(__osh_run -m osh.cli service fzf-select-session-backwards --session=$__osh_session)
+        CURSOR=$#BUFFER
+        zle reset-prompt
+    fi
+}
+
+zle -N __osh_session_backwards
+bindkey '^e' __osh_session_backwards
+bindkey -M vicmd '^e' __osh_session_backwards
+bindkey -M viins '^e' __osh_session_backwards
+
 function osh-sync-zsh {
     # merge in zsh history into osh history (one way)
     __osh_run -m osh.import zsh --machine $(hostname)
