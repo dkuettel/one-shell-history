@@ -106,14 +106,16 @@ class AggregatedEvent:
     most_recent_timestamp: datetime.datetime
     command: str
     occurence_count: int
-    failed_count: int
+    known_exit_count: int
+    failed_exit_count: int
 
     def to_json_dict(self):
         return dict(
             most_recent_timestamp=self.most_recent_timestamp.isoformat(),
             command=self.command,
             occurence_count=self.occurence_count,
-            failed_count=self.failed_count,
+            known_exit_count=self.known_exit_count,
+            failed_exit_count=self.failed_exit_count,
         )
 
     @classmethod
@@ -137,15 +139,18 @@ def aggregate_events_for_search(events: Iterable[Event]) -> Iterable[AggregatedE
         if event.command in aggregated_events:
             aggregated_event = aggregated_events[event.command]
             aggregated_event.occurence_count += 1
-            if event.exit_code not in {0, None}:
-                aggregated_event.failed_count += 1
+            if event.exit_code is not None:
+                aggregated_event.known_exit_count += 1
+                if event.exit_code != 0:
+                    aggregated_event.failed_exit_count += 1
         else:
             order.append(event.command)
             aggregated_events[event.command] = AggregatedEvent(
                 most_recent_timestamp=event.timestamp,
                 command=event.command,
                 occurence_count=1,
-                failed_count=0 if event.exit_code in {0, None} else 1,
+                known_exit_count=0 if event.exit_code is None else 1,
+                failed_exit_count=0 if event.exit_code in {0, None} else 1,
             )
     return [aggregated_events[i] for i in order]
 

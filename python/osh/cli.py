@@ -175,7 +175,13 @@ def fzf_select(ctx, query):
             fzf_ago = (now - event.most_recent_timestamp).total_seconds()
             fzf_ago = timedelta(seconds=round(fzf_ago))
 
-            fzf_info = f"[{str(fzf_ago)} ago] [{event.failed_count}/{event.occurence_count} failed]"
+            if event.known_exit_count == 0:
+                fzf_failed = "no fail statistics"
+            else:
+                fzf_failed = f"{round(100*event.failed_exit_count/event.known_exit_count)}% failed"
+            fzf_info = (
+                f"[{str(fzf_ago)} ago] [{event.occurence_count} calls, {fzf_failed}]"
+            )
 
             # escape literal \ followed by an n so they are not expanded to a new line by fzf's preview
             fzf_command = event.command.replace("\\n", "\\\\n")
