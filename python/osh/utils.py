@@ -3,6 +3,7 @@ import os
 import random
 import time
 from contextlib import contextmanager
+from dataclasses import field
 from pathlib import Path
 from typing import Optional
 
@@ -52,3 +53,7 @@ def locked_file(file: Path, wait: Optional[float] = None, forever: bool = False)
             os.close(fd)
         except:
             pass
+
+
+def ffield(default_factory):
+    return field(default_factory=default_factory)

@@ -2,4 +2,6 @@
 set -eux -o pipefail
 
 cd ${0:a:h}/..
-~/.local/bin/pipenv run python -m osh.cli.service serve
+path=($PWD/.venv/bin $path)
+export PYTHONPATH=$PWD/python
+python -m osh.cli service run

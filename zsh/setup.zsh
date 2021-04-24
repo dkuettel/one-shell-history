@@ -13,9 +13,11 @@ __osh_base=${__osh_base:a}
 function __osh_run {
     (
         cd $__osh_base
-        source .venv/bin/activate
-        export PYTHONPATH=python
+        path=($__osh_base/.venv/bin $path)
+        export VIRTUAL_ENV=$__osh_base/.venv
+        export PYTHONPATH=$__osh_base/python
         python $@
+        # TODO anyway generically make it call osh.cli service or direct?
     )
 }
 
@@ -24,6 +26,8 @@ function __osh_before {
     if [[ $command != '' ]]; then
         __osh_current_command=(
             --starttime $(date +%s)
+            # TODO date +%s.%N 1e9 nanoseconds, why not, then duration will also be more useful
+            # keep int and float in data so that later we know how much we can trust it?
             --command $command
             --folder "$(pwd)"
         )
@@ -40,8 +44,8 @@ function __osh_after {
             --machine "$(hostname)"
             --session $__osh_session
         )
-        if [[ -e ~/.one-shell-history/control-socket ]]; then
-            __osh_run -m osh.cli.service insert-event $__osh_current_command &!
+        if [[ -e ~/.one-shell-history/service.socket ]]; then
+            __osh_run -m osh.cli service insert-event $__osh_current_command &!
         else
             print -P '\n%F{1}%Sthe osh service doesnt seem to be running%s%f'
         fi
@@ -53,8 +57,8 @@ add-zsh-hook zshaddhistory __osh_before
 add-zsh-hook precmd __osh_after
 
 function __osh_search {
-    if [[ -e ~/.one-shell-history/control-socket ]]; then
-        BUFFER=$(__osh_run -m osh.cli.service fzf-select --query=$BUFFER)
+    if [[ -e ~/.one-shell-history/service.socket ]]; then
+        BUFFER=$(__osh_run -m osh.cli service fzf-select --query=$BUFFER)
         CURSOR=$#BUFFER
         zle reset-prompt
     fi
