@@ -10,7 +10,7 @@ import click
 import osh.service
 from osh import History
 from osh.fzf import fzf
-from osh.history import Event, LazyHistory
+from osh.history import Event, LazyHistory, SearchConfig
 from osh.utils import seconds_to_slang, str_mark_trailing_spaces
 
 default_folder = Path("~/.one-shell-history").expanduser()
@@ -199,10 +199,17 @@ def fzf_select(ctx, query, filter_failed):
 
     if result.key == "enter":
         print(event.command)
+
     elif result.key == "ctrl-c":
         print(query)
+
     elif result.key == "ctrl-x":
-        assert False
+        # TODO just as a POC loading here, ultimately probably cached or something, and locked
+        search_config = SearchConfig()
+        search_config.add_ignored_command(event.command)
+        # TODO how to give result.query as the new query?
+        fzf_select.invoke(ctx)
+
     else:
         print(f"unknown exit key {result.key}")
 
