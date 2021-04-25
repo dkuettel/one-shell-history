@@ -1,5 +1,6 @@
 import datetime
 import json
+import re
 from contextlib import contextmanager
 from dataclasses import astuple, dataclass, field
 from pathlib import Path
@@ -142,11 +143,11 @@ def aggregate_events(
     # also if we reverse, then Iterable is not really useful, unless it's a smarter iterable, some can do it fast?
     # or the in-memory list could be reverse already
 
-    boring_commands = {"ls", "lr", "ll", "htop", "v"}
+    config = SearchConfig()
     aggregated = {}
 
     for event in reversed(events):
-        if event.command in boring_commands:
+        if not config.event_is_useful(event):
             continue
 
         if event.command in aggregated:
@@ -243,3 +244,41 @@ class LazyHistory(History):
             disk_count_after = len(self._events)
             disk_count_added = disk_count_after - disk_count_before
         print(f"... lazy sync done, {disk_count_added} events added", flush=True)
+
+
+class SearchConfig:
+    _empty_config = {
+        "version": "1",
+        "ignored-commands": [],
+        "boring-patterns": [],
+    }
+
+    def __init__(self):
+        self._path = Path("~/.one-shell-history/search.json").expanduser()
+        self._read()
+
+    def _read(self):
+        if self._path.exists():
+            self._config = dict(self._empty_config)
+            self._config.update(json.loads(self._path.read_text()))
+        else:
+            self._config = dict(self._empty_config)
+        assert self._config["version"] == "1"
+        self._write()
+
+    def _write(self):
+        self._path.write_text(json.dumps(self._config, indent=4))
+
+    def event_is_useful(self, event: Event) -> bool:
+        # TODO hacky, should check if config file has changed the first time
+        if event.command in self._config["ignored-commands"]:
+            return False
+        for pattern in self._config["boring-patterns"]:
+            if re.fullmatch(pattern, event.command):
+                return False
+        return True
+
+    def add_ignored_command(self, command: str):
+        self._read()
+        self._config["ignored-commands"].append(command)
+        self._write()

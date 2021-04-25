@@ -10,7 +10,7 @@ import click
 import osh.service
 from osh import History
 from osh.history import Event, LazyHistory
-from osh.utils import seconds_to_slang
+from osh.utils import seconds_to_slang, str_mark_trailing_spaces
 
 default_folder = Path("~/.one-shell-history").expanduser()
 
@@ -190,6 +190,7 @@ def fzf_select(ctx, query, filter_failed):
             fzf_command = event.command.replace("\\n", "\\\\n")
             # escape actual new lines so they are expanded to a new line by fzf's preview
             fzf_command = fzf_command.replace("\n", "\\n")
+            fzf_command = str_mark_trailing_spaces(fzf_command)
             # TODO does that take care of all types of new lines, or other dangerous characters for fzf?
 
             fzf_line = f"{index} --- {fzf_info} --- {fzf_command}\n"

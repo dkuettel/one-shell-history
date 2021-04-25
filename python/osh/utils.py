@@ -79,3 +79,9 @@ def seconds_to_slang(seconds: float) -> str:
     if years < 2:
         return f"{round(years,1)}y"
     return f"{round(years)}y"
+
+
+def str_mark_trailing_spaces(s) -> str:
+    l = len(s)
+    s = s.rstrip(" ")
+    return s + "•" * (l - len(s)) 
