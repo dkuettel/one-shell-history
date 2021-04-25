@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Callable
 
 from osh import History, jsonp
-from osh.history import AggregatedEvent, Event, aggregate_events_for_search
+from osh.history import AggregatedEvent, Event
 
 
 @dataclass
@@ -33,8 +33,9 @@ class OshService:
         event = Event.from_json_dict(stream.read())
         self.history.insert_event(event)
 
-    def handle_list_events(self, stream):
-        for event in self.history.list_events():
+    def handle_aggregate_events(self, stream):
+        kwargs = stream.read()
+        for event in self.history.aggregate_events(**kwargs):
             stream.write(event.to_json_dict())
         stream.write(None)
 
@@ -73,9 +74,10 @@ class OshProxy:
             stream.write("insert_event")
             stream.write(event.to_json_dict())
 
-    def list_events(self):
+    def aggregate_events(self, **kwargs):
         with self._stream() as stream:
-            stream.write("list_events")
+            stream.write("aggregate_events")
+            stream.write(kwargs)
             while True:
                 event = stream.read()
                 if event is None:

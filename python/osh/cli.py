@@ -128,8 +128,9 @@ def insert_event(
 
 @commands
 @click.option("--query", default="")
+@click.option("--filter-failed/--no-filter-failed", default=True)
 @click.pass_context
-def fzf_select(ctx, query):
+def fzf_select(ctx, query, filter_failed):
 
     # TODO aggregate events makes it difficult to be incremental
     # unless maybe we do it backwards? especially if the preview info is computed on demand
@@ -138,7 +139,9 @@ def fzf_select(ctx, query):
 
     # TODO what happens if we dont finish consuming, we dont close the socket? or will the other side fail once we close it?
     with ctx.obj.make_history() as history:
-        events = history.list_events()
+        events = history.aggregate_events(
+            filter_failed_at=1.0 if filter_failed else None
+        )
         # TODO here we do sync because we exit osh, that's not useful
         # osh to be smart and have a dirty flag, or it doesnt sync unless you tell it to?
     # TODO rewrite in httpserver does that nice, adapt
@@ -175,13 +178,11 @@ def fzf_select(ctx, query):
             fzf_ago = (now - event.most_recent_timestamp).total_seconds()
             fzf_ago = timedelta(seconds=round(fzf_ago))
 
-            if event.known_exit_count == 0:
+            if event.fail_ratio is None:
                 fzf_failed = "no fail statistics"
             else:
-                fzf_failed = f"{round(100*event.failed_exit_count/event.known_exit_count)}% failed"
-            fzf_info = (
-                f"[{str(fzf_ago)} ago] [{event.occurence_count} calls, {fzf_failed}]"
-            )
+                fzf_failed = f"{event.fail_ratio:.0%} failed"
+            fzf_info = f"[{str(fzf_ago)} ago] [{event.occurence_count} calls, {fzf_failed}]"
 
             # escape literal \ followed by an n so they are not expanded to a new line by fzf's preview
             fzf_command = event.command.replace("\\n", "\\\\n")

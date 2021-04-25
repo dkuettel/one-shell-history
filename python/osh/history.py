@@ -126,33 +126,56 @@ class AggregatedEvent:
         )
         return cls(**jd)
 
+    @property
+    def fail_ratio(self) -> Optional[float]:
+        if self.known_exit_count == 0:
+            return None
+        return self.failed_exit_count / self.known_exit_count
 
-def aggregate_events_for_search(events: Iterable[Event]) -> Iterable[AggregatedEvent]:
+
+def aggregate_events(
+    events: Iterable[Event],
+    filter_failed_at: Optional[float] = 1.0,
+) -> Iterable[AggregatedEvent]:
+
     # TODO efficient enough? can really yield because stats are not ready before the end
-    # also if we reverse, then Iterable is not really useful
-    boring = {"ls", "lr", "ll", "htop", "v"}
-    order = []
-    aggregated_events = dict()
+    # also if we reverse, then Iterable is not really useful, unless it's a smarter iterable, some can do it fast?
+    # or the in-memory list could be reverse already
+
+    boring_commands = {"ls", "lr", "ll", "htop", "v"}
+    aggregated = {}
+
     for event in reversed(events):
-        if event.command in boring:
+        if event.command in boring_commands:
             continue
-        if event.command in aggregated_events:
-            aggregated_event = aggregated_events[event.command]
-            aggregated_event.occurence_count += 1
+
+        if event.command in aggregated:
+            agg = aggregated[event.command]
+            agg.occurence_count += 1
             if event.exit_code is not None:
-                aggregated_event.known_exit_count += 1
+                agg.known_exit_count += 1
                 if event.exit_code != 0:
-                    aggregated_event.failed_exit_count += 1
+                    agg.failed_exit_count += 1
         else:
-            order.append(event.command)
-            aggregated_events[event.command] = AggregatedEvent(
+            aggregated[event.command] = AggregatedEvent(
                 most_recent_timestamp=event.timestamp,
                 command=event.command,
                 occurence_count=1,
                 known_exit_count=0 if event.exit_code is None else 1,
                 failed_exit_count=0 if event.exit_code in {0, None} else 1,
             )
-    return [aggregated_events[i] for i in order]
+
+    # ordered as most recent event first
+    ordered = list(aggregated.values())
+
+    if filter_failed_at is not None:
+        ordered = [
+            e
+            for e in ordered
+            if (e.fail_ratio is None) or (e.fail_ratio < filter_failed_at)
+        ]
+
+    return ordered
 
 
 def print_events(events: List[Event]):

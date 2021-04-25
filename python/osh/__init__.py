@@ -8,7 +8,7 @@ from osh.history import (
     Event,
     History as Events,
     LazyHistory,
-    aggregate_events_for_search,
+    aggregate_events,
 )
 
 
@@ -67,10 +67,13 @@ class History:
         event_command = event.command.replace("\n", "\\n")
         print(f"insert event {event_command}", flush=True)
 
-    def list_events(self) -> Iterable[AggregatedEvent]:
+    def aggregate_events(
+        self,
+        filter_failed_at: Optional[float] = 1.0,
+    ) -> Iterable[AggregatedEvent]:
         with self._history_lock:
             events = self._history.as_list()
-        events = aggregate_events_for_search(events)
+        events = aggregate_events(events, filter_failed_at=filter_failed_at)
         return events
 
     def list_session_backwards(self, session: str) -> Iterable[Event]:
