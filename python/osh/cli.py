@@ -9,6 +9,7 @@ import click
 
 import osh.service
 from osh import History
+from osh.fzf import fzf
 from osh.history import Event, LazyHistory
 from osh.utils import seconds_to_slang, str_mark_trailing_spaces
 
@@ -149,30 +150,12 @@ def fzf_select(ctx, query, filter_failed):
     # TODO from here we can merge code with the direct client, once coming as a list, once coming as iterable for responsiveness
 
     now = datetime.now(tz=timezone.utc)
+    event_by_index = []
 
-    with subprocess.Popen(
-        args=[
-            "fzf",
-            f"--query={query}",
-            "--delimiter= --- ",
-            "--with-nth=3..",  # what to display (and search)
-            "--height=70%",
-            "--min-height=10",
-            "--layout=reverse",
-            "--prompt=> ",
-            "--preview-window=down:10:wrap",
-            "--preview=echo {2}; echo {3..}",
-        ],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-    ) as fzf:
-
-        event_by_index = []
+    def generate():
+        nonlocal event_by_index
 
         for index, event in enumerate(events):
-
-            if fzf.poll() is not None:
-                break
 
             event_by_index.append(event)
 
@@ -193,25 +176,41 @@ def fzf_select(ctx, query, filter_failed):
             fzf_command = str_mark_trailing_spaces(fzf_command)
             # TODO does that take care of all types of new lines, or other dangerous characters for fzf?
 
-            fzf_line = f"{index} --- {fzf_info} --- {fzf_command}\n"
-            fzf_line = fzf_line.encode("utf-8")
-            fzf.stdin.write(fzf_line)
+            yield f"{index} --- {fzf_info} --- {fzf_command}"
 
-            fzf.stdin.flush()
-        try:
-            # TODO maybe that only needs to happen in the for else case?
-            fzf.stdin.close()
-        except:
-            pass
-        fzf.wait()
-        try:
-            selection = fzf.stdout.read().decode("utf-8")
-            selection = selection.split(" --- ", maxsplit=1)[0]
-            selection = int(selection)
-            # TODO not sure what happens with the dangling new-line here and how zsh treats it when assigning to BUFFER
-            print(event_by_index[selection].command)
-        except:
-            pass
+    result = fzf(
+        generate(),
+        query=query,
+        delimiter=" --- ",
+        with_nth="3..",  # what to display (and search)
+        height="70%",
+        min_height="10",
+        layout="reverse",
+        prompt="> ",
+        preview_window="down:10:wrap",
+        preview="echo {2}; echo {3..}",
+        print_query=True,
+        expect="enter,ctrl-c,ctrl-x",
+        # TODO --read0 and we could have newlines in the data? also then --print0?
+    )
+
+    index = int(result.selection.split(" --- ", maxsplit=1)[0])
+    event = event_by_index[index]
+
+    if result.key == "enter":
+        print(event.command)
+    elif result.key == "ctrl-c":
+        print(query)
+    elif result.key == "ctrl-x":
+        assert False
+    else:
+        print(f"unknown exit key {result.key}")
+
+    # TODO other options
+    # execute-*, reload
+    # but we could also just tell osh, and then redo, an outer-loop reload
+    # or if osh is globally available, then just much easier pipe? if command has unique identifiers
+    # but we might lose functionality
 
 
 @commands
@@ -223,33 +222,10 @@ def fzf_select_session_backwards(ctx, session):
         events = history.list_session_backwards(session)
 
     now = datetime.now(tz=timezone.utc)
+    event_by_index = []
 
-    query = ""
-    with subprocess.Popen(
-        args=[
-            "fzf",
-            f"--query={query}",
-            "--delimiter= --- ",
-            "--with-nth=3..",  # what to display (and search)
-            "--nth=2..",  # what to search in the displayed part
-            "--height=70%",
-            "--min-height=10",
-            "--layout=default",
-            "--prompt=> ",
-            "--preview-window=down:10:wrap",
-            "--preview=echo {2}; echo {4..}",
-            "--tiebreak=index",
-        ],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-    ) as fzf:
-
-        event_by_index = []
-
+    def generate():
         for index, event in enumerate(events):
-
-            if fzf.poll() is not None:
-                break
 
             event_by_index.append(event)
 
@@ -263,25 +239,33 @@ def fzf_select_session_backwards(ctx, session):
             fzf_command = fzf_command.replace("\n", "\\n")
             # TODO does that take care of all types of new lines, or other dangerous characters for fzf?
 
-            fzf_line = f"{index} --- {fzf_info} --- {index+1:#2d}# {fzf_ago:>4s} ago --- {fzf_command}\n"
-            fzf_line = fzf_line.encode("utf-8")
-            fzf.stdin.write(fzf_line)
+            yield f"{index} --- {fzf_info} --- {index+1:#2d}# {fzf_ago:>4s} ago --- {fzf_command}"
 
-            fzf.stdin.flush()
-        try:
-            # TODO maybe that only needs to happen in the for else case?
-            fzf.stdin.close()
-        except:
-            pass
-        fzf.wait()
-        try:
-            selection = fzf.stdout.read().decode("utf-8")
-            selection = selection.split(" --- ", maxsplit=1)[0]
-            selection = int(selection)
-            # TODO not sure what happens with the dangling new-line here and how zsh treats it when assigning to BUFFER
-            print(event_by_index[selection].command)
-        except:
-            pass
+    result = fzf(
+        generate(),
+        query="",
+        delimiter=" --- ",
+        with_nth="3..",  # what to display (and search)
+        nth="2..",  # what to search in the displayed part
+        height="70%",
+        min_height="10",
+        layout="default",
+        prompt="> ",
+        preview_window="down:10:wrap",
+        preview="echo {2}; echo {4..}",
+        tiebreak="index",
+        expect="enter,ctrl-c",
+    )
+
+    index = int(result.selection.split(" --- ", maxsplit=1)[0])
+    event = event_by_index[index]
+
+    if result.key == "enter":
+        print(event.command)
+    elif result.key == "ctrl-c":
+        print()
+    else:
+        print(f"unknown exit key {result.key}")
 
 
 if __name__ == "__main__":
