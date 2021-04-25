@@ -57,3 +57,25 @@ def locked_file(file: Path, wait: Optional[float] = None, forever: bool = False)
 
 def ffield(default_factory):
     return field(default_factory=default_factory)
+
+
+def seconds_to_slang(seconds: float) -> str:
+    if seconds < 60:
+        return f"{round(seconds)}s"
+    minutes = seconds / 60
+    if minutes < 60:
+        return f"{round(minutes)}m"
+    hours = minutes / 60
+    if hours < 10:
+        return f"{round(hours,1)}h"
+    if hours < 24:
+        return f"{round(hours)}h"
+    days = hours / 24
+    if days < 2:
+        return f"{round(days,1)}d"
+    if days < 300:
+        return f"{round(days)}d"
+    years = days / 365
+    if years < 2:
+        return f"{round(years,1)}y"
+    return f"{round(years)}y"

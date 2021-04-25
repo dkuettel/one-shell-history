@@ -10,6 +10,7 @@ import click
 import osh.service
 from osh import History
 from osh.history import Event, LazyHistory
+from osh.utils import seconds_to_slang
 
 default_folder = Path("~/.one-shell-history").expanduser()
 
@@ -175,14 +176,15 @@ def fzf_select(ctx, query, filter_failed):
 
             event_by_index.append(event)
 
-            fzf_ago = (now - event.most_recent_timestamp).total_seconds()
-            fzf_ago = timedelta(seconds=round(fzf_ago))
+            fzf_ago = seconds_to_slang(
+                (now - event.most_recent_timestamp).total_seconds()
+            )
 
             if event.fail_ratio is None:
                 fzf_failed = "no fail statistics"
             else:
                 fzf_failed = f"{event.fail_ratio:.0%} failed"
-            fzf_info = f"[{str(fzf_ago)} ago] [{event.occurence_count} calls, {fzf_failed}]"
+            fzf_info = f"[{fzf_ago} ago] [{event.occurence_count} calls, {fzf_failed}]"
 
             # escape literal \ followed by an n so they are not expanded to a new line by fzf's preview
             fzf_command = event.command.replace("\\n", "\\\\n")
@@ -250,9 +252,9 @@ def fzf_select_session_backwards(ctx, session):
 
             event_by_index.append(event)
 
-            fzf_ago = round((now - event.timestamp).total_seconds())
+            fzf_ago = seconds_to_slang((now - event.timestamp).total_seconds())
 
-            fzf_info = f"[{fzf_ago}s ago] [exit={event.exit_code}]"
+            fzf_info = f"[{fzf_ago} ago] [exit={event.exit_code}]"
 
             # escape literal \ followed by an n so they are not expanded to a new line by fzf's preview
             fzf_command = event.command.replace("\\n", "\\\\n")
@@ -260,7 +262,7 @@ def fzf_select_session_backwards(ctx, session):
             fzf_command = fzf_command.replace("\n", "\\n")
             # TODO does that take care of all types of new lines, or other dangerous characters for fzf?
 
-            fzf_line = f"{index} --- {fzf_info} --- {index+1:#2d}# {fzf_ago:#4d}s --- {fzf_command}\n"
+            fzf_line = f"{index} --- {fzf_info} --- {index+1:#2d}# {fzf_ago:>4s} ago --- {fzf_command}\n"
             fzf_line = fzf_line.encode("utf-8")
             fzf.stdin.write(fzf_line)
 
