@@ -208,8 +208,7 @@ def fzf_select(ctx, query, filter_failed):
         # TODO just as a POC loading here, ultimately probably cached or something, and locked
         search_config = SearchConfig()
         search_config.add_ignored_command(event.command)
-        # TODO how to give result.query as the new query?
-        fzf_select.invoke(ctx)
+        ctx.invoke(fzf_select, query=result.query)
 
     else:
         print(f"unknown exit key {result.key}")
