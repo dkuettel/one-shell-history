@@ -1,0 +1,112 @@
+https://github.com/larkery/zsh-histdb/tree/4274de7c1bca84f440fb0125e6931c1f75ad5e29
+
+make sync maybe also merge with zsh history periodically?
+
+maybe a bit more logging?
+to see when it actually pulled stuff from zsh (which shouldnt happen often)
+
+for systemd (I think)
+find a convenient way to have it setup
+probably can install in local .config, systemd supports that, smoother anyway
+(for a script), no sudo required?
+
+not sure if dashes in systemd units is a good idea here, the separte some hierarchy there
+
+nice feature: flag entries as "unworthy"/"broken", so you dont keep on doing the same mistake
+    - but how, since you only notice _after_ you copied it and got annoyed
+    - with session backward search easy to get to that one again
+"unworthy" = simple stuff like ls
+"broken" = dont keep on bumping into it
+I guess both are ultimately just lists to ignore, not marked directly at event
+(could be marked at event in-memory for speed, but not in export data)
+could the fail count already help? docker purge system has 2/3 failed
+    ah probably because imported history doesnt know, we should show that clearly in the info
+    otherwise right there in search instead of enter something else will mark it as broken or unworthy
+    and then reload with same search expression
+    this already helps
+let's try ctrl-x do mark as ignore, just one list, should be fine
+first have basic func in, then see if fzf supports a nice behavior
+change entry or quick reload and same query and place?
+
+libyaml or something makes parsing faster?
+
+https://github.com/dahlia/iterfzf is interesting
+see as next step, check what it does
+is there a better way to combine it? --preview could point to a python function, that would be even nicer
+ok in our case we could do a request to the server, and maybe easy in linux because it's plain http
+
+pylint and co setup here already?
+
+use structed logging
+with that also the log (in home folder) could reconstruct everything for later
+
+if something fails in the main code fzf doesnt exit/reset, why?
+
+ah see there is a todo.todo file too
+
+py_cache stuff makes it faster? or should I disable it?
+it's probably there because in systemd I dont have the env to disable it
+
+ansi colors could be nice, to highlight the command and not the side info?
+
+search config is not synced yet
+
+
+data sync and ideas:
+- lets have a file per machine, so no concurrent access
+- the config folder just contains history.json
+- json is faster than yaml, so good enough for the data
+- probably contain some format version info too
+- and hostname, host uuid, a creation date
+- as said, the config file is like a dotfile, only read and watched, not written
+- and the user takes care of syncing it, and managing conflicts/distribution
+    - maybe use toml
+    - dont forget version info in there for parsing and later changes
+- if users do ctrl-x we add it to a new-ignore.yaml or toml or just list and user can add if they want
+- with a single file per host
+    - no concurrency, the host is the authority
+    - until it doesnt exist anymore, then it's the passive storage (git, shared fs)
+    - this means we can delete stuff in some ways
+    - a local server just aggregates local history and all the others from potential sources
+    - potential sources
+        - git
+        - shared fs
+        - both of them can contain traditional shell histories to be merged in, we dont really import!
+            - the original shell history file
+            - and some metainfo to augment it with maybe a hostname or just a note
+            - these are just read and need to be managed by the user completely
+            - so put it in git and all good, dont change anyway, but can also be local or dbox, up to user
+- git source
+    - can be any git, there is just a designated place to look for histories to aggregate
+    - and we pull to keep it udpated
+    - plus a place where we put ourselves and push, if new events and time for it
+    - make those files uncolliding: hostname-creationdate-uuid or something
+    - we assume that file is ours, so always "ours", we dont merge incoming changes on that file
+    - how to handle that to be absolutely sure? should we detect an "impossible" collision at first use?
+    - user might want to actually symlink and put the dot file here
+        - but then service process might be staging while the user is trying to do that
+        - so either user needs a different checkout, then not much different from normal solution
+        - or maybe there is some locking or bare-bone to help with that?
+        - probably not worth it, keep that in the users hand completely, he can always push to the same repo
+- shared fs source
+    - more realtime (dropbox, efs, syncthing, one drive, "rsync")
+    - almost the same as git above, probably much can be shared
+    - but think about file sizes and how efficient is shared fs syncing?
+    - one possibility is to have ancient-history.json and recent-history.json on top of non-collision naming
+    - the recent-history stays between 50 and 100kb or something like that
+    - for realtime, we watch those files and reload, except ours, that we just write
+- make a global osh command
+    - makes zsh widgets easier, maybe also bash and others then
+    - plus user can easy use the command
+    - not sure how to manage direct vs service, service should be easy and default
+    - maybe osh insert-event is service
+    - then osh --direct insert-event switches the proxy
+    - osh status should give some easy info
+        - some stats about number of events and unique events
+        - info about last sync, and recentness of state
+        - config file status, problems? validated? version info?
+        - some stats about speed (to maybe find out too much filtering or too many sources?)
+            - if ever it gets too slow need to precompute the sources more, i'm sure that's possible
+    - osh test-pattern or so for trying out ignore patterns
+        - like list all that would be ignored
+        - or type and see?
