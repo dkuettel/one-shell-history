@@ -69,10 +69,15 @@ class History:
     def aggregate_events(
         self,
         filter_failed_at: Optional[float] = 1.0,
+        filter_ignored: bool = True,
     ) -> Iterable[AggregatedEvent]:
         with self._history_lock:
             events = self._history.as_list()
-        events = aggregate_events(events, filter_failed_at=filter_failed_at)
+        events = aggregate_events(
+            events,
+            filter_failed_at=filter_failed_at,
+            filter_ignored=filter_ignored,
+        )
         return events
 
     def list_session_backwards(self, session: str) -> Iterable[Event]:

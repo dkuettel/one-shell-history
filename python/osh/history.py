@@ -137,17 +137,23 @@ class AggregatedEvent:
 def aggregate_events(
     events: Iterable[Event],
     filter_failed_at: Optional[float] = 1.0,
+    filter_ignored: bool = True,
 ) -> Iterable[AggregatedEvent]:
 
     # TODO efficient enough? can really yield because stats are not ready before the end
     # also if we reverse, then Iterable is not really useful, unless it's a smarter iterable, some can do it fast?
     # or the in-memory list could be reverse already
 
-    config = SearchConfig()
+    if filter_ignored:
+        config = SearchConfig()
+        event_is_useful = config.event_is_useful
+    else:
+        event_is_useful = lambda _: True
+
     aggregated = {}
 
     for event in reversed(events):
-        if not config.event_is_useful(event):
+        if not event_is_useful(event):
             continue
 
         if event.command in aggregated:

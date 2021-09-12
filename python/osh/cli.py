@@ -131,8 +131,9 @@ def insert_event(
 @commands
 @click.option("--query", default="")
 @click.option("--filter-failed/--no-filter-failed", default=True)
+@click.option("--filter-ignored/--no-filter-ignored", default=True)
 @click.pass_context
-def fzf_select(ctx, query, filter_failed):
+def fzf_select(ctx, query, filter_failed, filter_ignored):
 
     # TODO aggregate events makes it difficult to be incremental
     # unless maybe we do it backwards? especially if the preview info is computed on demand
@@ -142,7 +143,8 @@ def fzf_select(ctx, query, filter_failed):
     # TODO what happens if we dont finish consuming, we dont close the socket? or will the other side fail once we close it?
     with ctx.obj.make_history() as history:
         events = history.aggregate_events(
-            filter_failed_at=1.0 if filter_failed else None
+            filter_failed_at=1.0 if filter_failed else None,
+            filter_ignored=filter_ignored,
         )
         # TODO here we do sync because we exit osh, that's not useful
         # osh to be smart and have a dirty flag, or it doesnt sync unless you tell it to?
@@ -186,11 +188,11 @@ def fzf_select(ctx, query, filter_failed):
         height="70%",
         min_height="10",
         layout="reverse",
-        prompt="> ",
+        prompt="> " if filter_ignored else "all> ",
         preview_window="down:10:wrap",
         preview="echo {2}; echo {3..}",
         print_query=True,
-        expect="enter,ctrl-c,ctrl-x",
+        expect="enter,ctrl-c,ctrl-x,ctrl-r",
         tiebreak="index",
         # TODO --read0 and we could have newlines in the data? also then --print0?
     )
@@ -209,6 +211,15 @@ def fzf_select(ctx, query, filter_failed):
         search_config = SearchConfig()
         search_config.add_ignored_command(event.command)
         ctx.invoke(fzf_select, query=result.query)
+
+    elif result.key == "ctrl-r":
+        # switch between filter ignore and show all
+        ctx.invoke(
+            fzf_select,
+            query=result.query,
+            filter_failed=not filter_ignored,
+            filter_ignored=not filter_ignored,
+        )
 
     else:
         print(f"unknown exit key {result.key}")
