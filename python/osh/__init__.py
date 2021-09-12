@@ -41,14 +41,14 @@ class History:
                         timeout = None
                     else:
                         timeout = interval - (time.time() - last_sync)
-                    print(f"{timeout=}")
+                    print(f"{timeout=:.0f}s")
                     interval = self._sync_queue.get(timeout=timeout)
                     if interval == "exit":
                         return
             except queue.Empty:
                 pass
             with self._history_lock:
-                print("sync because of interval")
+                print("sync because of interval", flush=True)
                 self._history.sync()
             last_sync = time.time()
 
@@ -65,7 +65,6 @@ class History:
         with self._history_lock:
             self._history.insert_event(event)
         event_command = event.command.replace("\n", "\\n")
-        print(f"insert event {event_command}", flush=True)
 
     def aggregate_events(
         self,
