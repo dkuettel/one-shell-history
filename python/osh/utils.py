@@ -84,4 +84,4 @@ def seconds_to_slang(seconds: float) -> str:
 def str_mark_trailing_spaces(s) -> str:
     l = len(s)
     s = s.rstrip(" ")
-    return s + "•" * (l - len(s)) 
+    return s + "•" * (l - len(s))
