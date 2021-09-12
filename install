@@ -8,7 +8,7 @@ base=${0:a:h}
 cd $base
 
 (
-    virtualenv --python python3.8 $base/.venv
+    virtualenv --python python3.9 $base/.venv
     path=($base/.venv/bin $path)
     pip install --upgrade pip pip-tools
     pip-sync
