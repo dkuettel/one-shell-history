@@ -191,6 +191,7 @@ def fzf_select(ctx, query, filter_failed):
         preview="echo {2}; echo {3..}",
         print_query=True,
         expect="enter,ctrl-c,ctrl-x",
+        tiebreak="index",
         # TODO --read0 and we could have newlines in the data? also then --print0?
     )
 
