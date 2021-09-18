@@ -191,6 +191,11 @@ def aggregate_events(
             if (e.fail_ratio is None) or (e.fail_ratio < filter_failed_at)
         ]
 
+    # order as most often first
+    ordered = sorted(ordered, key=lambda e: -e.occurence_count)
+    # TODO not sure if that's better, if it is, can do it directly, no need to above first make most-recent-first
+    # alternatively make it configurable thru command line
+
     return ordered
 
 
