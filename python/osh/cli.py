@@ -197,24 +197,27 @@ def fzf_select(ctx, query, filter_failed, filter_ignored):
         # TODO --read0 and we could have newlines in the data? also then --print0?
     )
 
-    if result.selection is None:
-        print()
-        return
-
-    index = int(result.selection.split(" --- ", maxsplit=1)[0])
-    event = event_by_index[index]
-
     if result.key == "enter":
-        print(event.command)
+        if result.selection is None:
+            print()
+        else:
+            index = int(result.selection.split(" --- ", maxsplit=1)[0])
+            event = event_by_index[index]
+            print(event.command)
 
     elif result.key == "ctrl-c":
         print(query)
 
     elif result.key == "ctrl-x":
         # TODO just as a POC loading here, ultimately probably cached or something, and locked
-        search_config = SearchConfig()
-        search_config.add_ignored_command(event.command)
-        ctx.invoke(fzf_select, query=result.query)
+        if result.selection is None:
+            ctx.invoke(fzf_select, query=result.query)
+        else:
+            index = int(result.selection.split(" --- ", maxsplit=1)[0])
+            event = event_by_index[index]
+            search_config = SearchConfig()
+            search_config.add_ignored_command(event.command)
+            ctx.invoke(fzf_select, query=result.query)
 
     elif result.key == "ctrl-r":
         # switch between filter ignore and show all
@@ -281,15 +284,13 @@ def fzf_select_backwards(ctx, query, session, session_id):
         expect="enter,ctrl-c,ctrl-e",
     )
 
-    if result.selection is None:
-        print()
-        return
-
-    index = int(result.selection.split(" --- ", maxsplit=1)[0])
-    event = event_by_index[index]
-
     if result.key == "enter":
-        print(event.command)
+        if result.selection is None:
+            print()
+        else:
+            index = int(result.selection.split(" --- ", maxsplit=1)[0])
+            event = event_by_index[index]
+            print(event.command)
     elif result.key == "ctrl-c":
         print()
     elif result.key == "ctrl-e":
