@@ -11,9 +11,13 @@ class Result:
     selection: Optional[str] = None
 
 
-class NonZeroExit(Exception):
+class Error(Exception):
     def __init__(self, returncode):
         self.returncode = returncode
+
+
+class UnexpectedKeys(Error):
+    pass
 
 
 def fzf(entries, /, **kwargs) -> Result:
@@ -45,8 +49,16 @@ def fzf(entries, /, **kwargs) -> Result:
         p.wait()
 
         assert p.returncode is not None
-        if p.returncode != 0:
-            raise NonZeroExit(p.returncode)
+        if p.returncode == 0:
+            has_match = True
+        elif p.returncode == 1:
+            has_match = False
+        elif p.returncode == 2:
+            raise Error(p.returncode)
+        elif p.returncode == 130:
+            raise UnexpectedKeys(p.returncode)
+        else:
+            raise Exception(f"unknown return code {p.returncode} from fzf")
 
         if "print0" in kwargs:
             outputs = p.stdout.read().decode("utf-8").split("\0")[:-1]
@@ -58,7 +70,8 @@ def fzf(entries, /, **kwargs) -> Result:
             result.query = outputs.pop(0)
         if "expect" in kwargs:
             result.key = outputs.pop(0)
-        result.selection = outputs.pop()
+        if has_match:
+            result.selection = outputs.pop()
         assert len(outputs) == 0, outputs
 
     return result
