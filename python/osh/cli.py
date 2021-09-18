@@ -188,7 +188,7 @@ def fzf_select(ctx, query, filter_failed, filter_ignored):
         height="70%",
         min_height="10",
         layout="reverse",
-        prompt="> " if filter_ignored else "all> ",
+        prompt="agg> " if filter_ignored else "all> ",
         preview_window="down:10:wrap",
         preview="echo {2}; echo {3..}",
         print_query=True,
