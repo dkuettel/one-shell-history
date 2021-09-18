@@ -29,7 +29,6 @@ class Event:
 
     def to_json_dict(self):
         jd = dict()
-        # TODO does this format support milliseconds and all?
         jd["timestamp"] = self.timestamp.isoformat()
         jd["command"] = self.command
         if self.duration is not None:

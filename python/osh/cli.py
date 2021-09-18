@@ -92,9 +92,9 @@ def commands(fn):
 
 
 @commands
-@click.option("--starttime", type=int, required=True)
+@click.option("--starttime", type=float, required=True)
 @click.option("--command", type=str, required=True)
-@click.option("--endtime", type=int, required=True)
+@click.option("--endtime", type=float, required=True)
 @click.option("--exit-code", type=int, required=True)
 @click.option("--folder", type=str, required=True)
 @click.option("--machine", type=str, required=True)

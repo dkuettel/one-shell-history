@@ -25,9 +25,7 @@ function __osh_before {
     local command=${1[0,-2]}
     if [[ $command != '' ]]; then
         __osh_current_command=(
-            --starttime $(date +%s)
-            # TODO date +%s.%N 1e9 nanoseconds, why not, then duration will also be more useful
-            # keep int and float in data so that later we know how much we can trust it?
+            --starttime $(date '+%s.%N')
             --command $command
             --folder "$(pwd)"
         )
@@ -39,7 +37,7 @@ function __osh_after {
     if [[ -v __osh_current_command ]]; then
         __osh_session=${__osh_session:-$(uuidgen)}
         __osh_current_command+=(
-            --endtime $(date +%s)
+            --endtime $(date '+%s.%N')
             --exit-code $exit_code
             --machine "$(hostname)"
             --session $__osh_session
