@@ -1,6 +1,7 @@
 import datetime
 import json
 import re
+from collections import Counter
 from contextlib import contextmanager
 from dataclasses import astuple, dataclass, field
 from pathlib import Path
@@ -109,6 +110,8 @@ class AggregatedEvent:
     occurence_count: int
     known_exit_count: int
     failed_exit_count: int
+    folders: Counter
+    most_recent_folder: Optional[str]
 
     def to_json_dict(self):
         return dict(
@@ -117,6 +120,8 @@ class AggregatedEvent:
             occurence_count=self.occurence_count,
             known_exit_count=self.known_exit_count,
             failed_exit_count=self.failed_exit_count,
+            folders=self.folders,
+            most_recent_folder=self.most_recent_folder,
         )
 
     @classmethod
@@ -125,6 +130,7 @@ class AggregatedEvent:
         jd["most_recent_timestamp"] = datetime.datetime.fromisoformat(
             jd["most_recent_timestamp"]
         )
+        jd["folders"] = Counter(jd["folders"])
         return cls(**jd)
 
     @property
@@ -163,6 +169,7 @@ def aggregate_events(
                 agg.known_exit_count += 1
                 if event.exit_code != 0:
                     agg.failed_exit_count += 1
+            agg.folders.update({event.folder})
         else:
             aggregated[event.command] = AggregatedEvent(
                 most_recent_timestamp=event.timestamp,
@@ -170,6 +177,8 @@ def aggregate_events(
                 occurence_count=1,
                 known_exit_count=0 if event.exit_code is None else 1,
                 failed_exit_count=0 if event.exit_code in {0, None} else 1,
+                folders=Counter({event.folder}),
+                most_recent_folder=event.folder,
             )
 
     # ordered as most recent event first
