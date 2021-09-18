@@ -39,9 +39,9 @@ class OshService:
             stream.write(event.to_json_dict())
         stream.write(None)
 
-    def handle_list_session_backwards(self, stream):
+    def handle_list_backwards(self, stream):
         session = stream.read()
-        for event in self.history.list_session_backwards(session):
+        for event in self.history.list_backwards(session):
             stream.write(event.to_json_dict())
         stream.write(None)
 
@@ -84,9 +84,9 @@ class OshProxy:
                     break
                 yield AggregatedEvent.from_json_dict(event)
 
-    def list_session_backwards(self, session):
+    def list_backwards(self, session=None):
         with self._stream() as stream:
-            stream.write("list_session_backwards")
+            stream.write("list_backwards")
             stream.write(session)
             while True:
                 event = stream.read()

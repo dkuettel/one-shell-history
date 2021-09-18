@@ -80,11 +80,12 @@ class History:
         )
         return events
 
-    def list_session_backwards(self, session: str) -> Iterable[Event]:
+    def list_backwards(self, session: Optional[str] = None) -> Iterable[Event]:
         with self._history_lock:
             events = self._history.as_list()
         events = reversed(events)
-        events = (e for e in events if e.session == session)
+        if session is not None:
+            events = (e for e in events if e.session == session)
         return events
 
     def close(self):

@@ -236,12 +236,14 @@ def fzf_select(ctx, query, filter_failed, filter_ignored):
 
 
 @commands
-@click.option("--session", required=True)
+@click.option("--query", default="")
+@click.option("--session/--global", default=True)
+@click.option("--session-id", default=None)
 @click.pass_context
-def fzf_select_session_backwards(ctx, session):
+def fzf_select_backwards(ctx, query, session, session_id):
 
     with ctx.obj.make_history() as history:
-        events = history.list_session_backwards(session)
+        events = history.list_backwards(session_id if session else None)
 
     now = datetime.now(tz=timezone.utc)
     event_by_index = []
@@ -272,11 +274,11 @@ def fzf_select_session_backwards(ctx, session):
         height="70%",
         min_height="10",
         layout="default",
-        prompt="> ",
+        prompt="session> " if session else "global> ",
         preview_window="down:10:wrap",
         preview="echo {2}; echo {4..}",
         tiebreak="index",
-        expect="enter,ctrl-c",
+        expect="enter,ctrl-c,ctrl-e",
     )
 
     if result.selection is None:
@@ -290,6 +292,14 @@ def fzf_select_session_backwards(ctx, session):
         print(event.command)
     elif result.key == "ctrl-c":
         print()
+    elif result.key == "ctrl-e":
+        # switch between per-session and global
+        ctx.invoke(
+            fzf_select_backwards,
+            query=result.query,
+            session=not session,
+            session_id=session_id,
+        )
     else:
         assert False, result.key
 
