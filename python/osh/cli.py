@@ -197,6 +197,10 @@ def fzf_select(ctx, query, filter_failed, filter_ignored):
         # TODO --read0 and we could have newlines in the data? also then --print0?
     )
 
+    if result.selection is None:
+        print()
+        return
+
     index = int(result.selection.split(" --- ", maxsplit=1)[0])
     event = event_by_index[index]
 
@@ -222,7 +226,7 @@ def fzf_select(ctx, query, filter_failed, filter_ignored):
         )
 
     else:
-        print(f"unknown exit key {result.key}")
+        assert False, result.key
 
     # TODO other options
     # execute-*, reload
@@ -275,6 +279,10 @@ def fzf_select_session_backwards(ctx, session):
         expect="enter,ctrl-c",
     )
 
+    if result.selection is None:
+        print()
+        return
+
     index = int(result.selection.split(" --- ", maxsplit=1)[0])
     event = event_by_index[index]
 
@@ -283,7 +291,7 @@ def fzf_select_session_backwards(ctx, session):
     elif result.key == "ctrl-c":
         print()
     else:
-        print(f"unknown exit key {result.key}")
+        assert False, result.key
 
 
 if __name__ == "__main__":
