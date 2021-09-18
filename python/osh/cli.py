@@ -171,6 +171,13 @@ def fzf_select(ctx, query, filter_failed, filter_ignored):
                 fzf_failed = f"{event.fail_ratio:.0%} failed"
             fzf_info = f"[{fzf_ago} ago] [{event.occurence_count} calls, {fzf_failed}]"
 
+            fzf_folders1 = f"[most recent folder: {event.most_recent_folder}]"
+            fzf_folders2 = (
+                "["
+                + ", ".join(f"{c}x {f}" for f, c in event.folders.most_common(3))
+                + "]"
+            )
+
             # escape literal \ followed by an n so they are not expanded to a new line by fzf's preview
             fzf_command = event.command.replace("\\n", "\\\\n")
             # escape actual new lines so they are expanded to a new line by fzf's preview
@@ -178,19 +185,19 @@ def fzf_select(ctx, query, filter_failed, filter_ignored):
             fzf_command = str_mark_trailing_spaces(fzf_command)
             # TODO does that take care of all types of new lines, or other dangerous characters for fzf?
 
-            yield f"{index} --- {fzf_info} --- {fzf_command}"
+            yield f"{index} --- {fzf_info} --- {fzf_folders1} --- {fzf_folders2} --- {fzf_command}"
 
     result = fzf(
         generate(),
         query=query,
         delimiter=" --- ",
-        with_nth="3..",  # what to display (and search)
+        with_nth="5..",  # what to display (and search)
         height="70%",
         min_height="10",
         layout="reverse",
         prompt="agg> " if filter_ignored else "all> ",
         preview_window="down:10:wrap",
-        preview="echo {2}; echo {3..}",
+        preview="echo {2}; echo {3}; echo {4}; echo; echo {5..}",
         print_query=True,
         expect="enter,ctrl-c,ctrl-x,ctrl-r",
         tiebreak="index",
