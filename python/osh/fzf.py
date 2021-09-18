@@ -35,11 +35,16 @@ def fzf(entries, /, **kwargs) -> Result:
         stdout=S.PIPE,
     ) as p:
 
+        entries = iter(entries)
         for entry in entries:
             if p.poll() is not None:
                 break
             p.stdin.write((str(entry) + "\n").encode("utf-8"))
             p.stdin.flush()
+        # TODO we need to completely flush entries so that things are cleaned-up, a bit of a hack
+        # otherwise, if entries is a generator that consumes from a socket, it will never close the socket
+        # this will make the server unresponsive after that
+        list(entries)
 
         try:
             # TODO maybe that only needs to happen in the for else case?
