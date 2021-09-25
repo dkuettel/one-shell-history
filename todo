@@ -1,3 +1,18 @@
+move master to main also on remote? I think yves needs to know then (?)
+
+in-memory:
+- daemon should keep data in-memory
+    - make writes atomic and merge things, never anything lost, even if more than one daemon
+- generic interface, backend can be in-memory or loading (as currently)
+    - also allows to have it run non-daemon
+- interfaces
+    - a class History with events and locking and the like, high-level enough so we can do efficient things
+        - make current one as this
+        - make new in-memory like this
+    - a cli that can talk
+        - directly to a history
+        - or thru a socket
+
 https://github.com/larkery/zsh-histdb/tree/4274de7c1bca84f440fb0125e6931c1f75ad5e29
 
 make sync maybe also merge with zsh history periodically?
