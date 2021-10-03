@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from osh.history import Event
+from osh.osh_file import OshFile
 
 
 class Source:
@@ -58,68 +59,12 @@ class Union(Source):
         return events + merge_events
 
 
-default_file = Path("~/.one-shell-history/history.json")
-
-
 class OshSource(Source):
-    """
-    the format is json lines
-    the file extension is osh, eg, history.osh
-    the file only grows in lines, should make it easy to append and read when watching
-    entries contain any of those keys
-        format, machine, description, event
-    all but event overwrite a previous setting, event appends to events
-    event contains the keys
-        timestamp, command, duration, exit-code, folder, session
-    the only format currently is "osh-history-v1"
-    """
-
-    def __init__(self, file: Path = default_file):
-        self.file = file
+    def __init__(self, osh_file: OshFile):
+        self.osh_file = osh_file
 
     def as_list(self) -> list[Event]:
-
-        file = self.file.expanduser()
-
-        meta_format = "osh-history-v1"
-        meta_machine = None
-        meta_description = None
-        events = []
-
-        with file.open("rt") as lines:
-            for line in lines:
-                if line == "\n":
-                    continue
-                line = json.loads(line)
-
-                if "format" in line:
-                    meta_format = line["format"]
-                    assert meta_format == "osh-history-v1"
-
-                if "machine" in line:
-                    meta_machine = line["machine"]
-
-                if "description" in line:
-                    meta_description = line["description"]
-
-                if "event" in line:
-                    event = line["event"]
-                    assert machine is not None
-                    events.append(
-                        Event(
-                            timestamp=datetime.datetime.fromisoformat(
-                                event["timestamp"]
-                            ),
-                            command=event["command"],
-                            duration=event["duration"],
-                            exit_code=event["exit-code"],
-                            folder=event["folder"],
-                            machine=machine,
-                            session=event["session"],
-                        )
-                    )
-
-        return events
+        return self.osh_file.as_list()
 
 
 default_legacy_file = Path("~/.one-shell-history/events.json")
