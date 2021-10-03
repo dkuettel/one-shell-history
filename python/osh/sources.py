@@ -19,7 +19,7 @@ class Source:
         raise NotImplementedError()
 
 
-class Union(Source):
+class UnionSource(Source):
     def __init__(
         self,
         sources: list[Source],
@@ -149,7 +149,7 @@ class ZshSource(Source):
 if __name__ == "__main__":
     sources = [OshLegacySource()]
     merge_sources = [ZshSource()]
-    source = Union(sources, merge_sources)
+    source = UnionSource(sources, merge_sources)
     events = source.as_list()
     print(f"{len(events)=}")
     print(f"{events[-1]=}")

@@ -32,6 +32,17 @@ class OshFile:
     def __init__(self, file: Path = default_file):
         self.file = file
 
+    def exists(self) -> bool:
+        return self.file.expanduser().exists()
+
+    def create(self, machine: str):
+        file = self.file.expanduser()
+        header = {
+            "format": "osh-history-v1",
+            "machine": machine,
+        }
+        file.write_text(json.dumps(header) + "\n")
+
     def as_list(self) -> list[Event]:
 
         file = self.file.expanduser()
