@@ -60,54 +60,66 @@ class Union(Source):
 
 default_file = Path("~/.one-shell-history/history.json")
 
-""" osh file format
-a single json:
-{
-    "format": "osh-history-v1",
-    "machine": "...",
-    "description": "...",
-    events: [
-        {
-            "timestamp": "...",
-            "command": "...",
-            "duration": ...,
-            "exit-code": ...,
-            "folder": "...",
-            "session": "...",
-        },
-        ...
-    ],
-}
-"""
-
 
 class OshSource(Source):
+    """
+    the format is json lines
+    the file extension is osh, eg, history.osh
+    the file only grows in lines, should make it easy to append and read when watching
+    entries contain any of those keys
+        format, machine, description, event
+    all but event overwrite a previous setting, event appends to events
+    event contains the keys
+        timestamp, command, duration, exit-code, folder, session
+    the only format currently is "osh-history-v1"
+    """
+
     def __init__(self, file: Path = default_file):
         self.file = file
 
     def as_list(self) -> list[Event]:
 
         file = self.file.expanduser()
-        data = json.loads(file.read_text())
 
-        # TODO a nicer way to have a schema and validate?
-        assert data["format"] == "osh-history-v1"
+        meta_format = "osh-history-v1"
+        meta_machine = None
+        meta_description = None
+        events = []
 
-        machine = data["machine"]
-        assert machine is not None
+        with file.open("rt") as lines:
+            for line in lines:
+                if line == "\n":
+                    continue
+                line = json.loads(line)
 
-        return [
-            Event(
-                timestamp=datetime.datetime.fromisoformat(e["timestamp"]),
-                command=e["command"],
-                duration=e["duration"],
-                exit_code=e["exit-code"],
-                folder=e["folder"],
-                machine=machine,
-                session=e["session"],
-            )
-            for e in data["events"]
-        ]
+                if "format" in line:
+                    meta_format = line["format"]
+                    assert meta_format == "osh-history-v1"
+
+                if "machine" in line:
+                    meta_machine = line["machine"]
+
+                if "description" in line:
+                    meta_description = line["description"]
+
+                if "event" in line:
+                    event = line["event"]
+                    assert machine is not None
+                    events.append(
+                        Event(
+                            timestamp=datetime.datetime.fromisoformat(
+                                event["timestamp"]
+                            ),
+                            command=event["command"],
+                            duration=event["duration"],
+                            exit_code=event["exit-code"],
+                            folder=event["folder"],
+                            machine=machine,
+                            session=event["session"],
+                        )
+                    )
+
+        return events
 
 
 default_legacy_file = Path("~/.one-shell-history/events.json")
