@@ -98,6 +98,11 @@ class CannotParse(Exception):
     pass
 
 
+zsh_event_pattern = re.compile(
+    r"^: (?P<timestamp>\d+):(?P<duration>\d+);(?P<command>.*)$"
+)
+
+
 class ZshSource(Source):
     def __init__(
         self,
@@ -113,10 +118,6 @@ class ZshSource(Source):
         # maybe check what it looks like on a fresh system
         # and/or see that we fail if not as expected
 
-        pattern = re.compile(
-            r"^: (?P<timestamp>\d+):(?P<duration>\d+);(?P<command>.*)$"
-        )
-
         events = []
         zsh_history = enumerate(
             self.file.expanduser()
@@ -126,10 +127,12 @@ class ZshSource(Source):
         )
 
         for line, content in zsh_history:
-            match = pattern.fullmatch(content)
+            match = zsh_event_pattern.fullmatch(content)
             if match is None:
-                raise CannotParse(f"cannot parse line {line} = {content.strip()}")
-            # from what I understand, zsh_history uses a posix time stamp, utc, second resolution
+                raise CannotParse(
+                    f"cannot parse around {self.file}:{line} = {json.dumps(content)}"
+                )
+            # from what I understand, zsh_history uses a posix time stamp, utc, second resolution (floor of float seconds)
             timestamp = datetime.datetime.fromtimestamp(
                 int(match["timestamp"]), tz=datetime.timezone.utc
             )

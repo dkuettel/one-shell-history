@@ -32,9 +32,10 @@ def histories_from_folder_structure(
     osh_source = OshSource(osh_file)
 
     # TODO we dont watch yet in case archive gets new files added (not file content changes though)
+    # simplest implementation just reloads completely on potential changes
     sources = (
         [osh_source]
-        + discover_active_sources(basefolder, ignore=basefolder / sink_path)
+        + discover_active_osh_sources(basefolder, ignore=basefolder / sink_path)
         + discover_archived_osh_sources(basefolder)
     )
     merge_sources = discover_archived_other_sources(basefolder)
@@ -45,7 +46,7 @@ def histories_from_folder_structure(
     return osh_sink, full_source
 
 
-def discover_active_sources(
+def discover_active_osh_sources(
     basefolder: Path, ignore: Optional[Path] = None
 ) -> list[OshSource]:
     return [
@@ -61,3 +62,12 @@ def discover_archived_osh_sources(basefolder: Path) -> list[Source]:
 
 def discover_archived_other_sources(basefolder: Path) -> list[Source]:
     return [ZshSource(file) for file in basefolder.glob("archive/**/*.zsh_history")]
+
+
+if __name__ == "__main__":
+    sink, source = histories_from_folder_structure(
+        Path("histories"), Path("base.osh")
+    )
+    events = source.as_list()
+    print(f"{len(events)=}")
+    print(f"{events[-1]=}")
