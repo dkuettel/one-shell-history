@@ -37,7 +37,7 @@ class OshFile:
     def exists(self) -> bool:
         return self.file.expanduser().exists()
 
-    def create(self, machine: str):
+    def create(self):
         file = self.file.expanduser()
         header = {
             "format": "osh-history-v1",

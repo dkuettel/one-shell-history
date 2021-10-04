@@ -25,8 +25,7 @@ def histories_from_folder_structure(
 
     osh_file = OshFile(basefolder / sink_path)
     if not osh_file.exists():
-        # TODO wheres a good place to init? fail if not there?
-        osh_file.create(machine="todo")
+        osh_file.create()
 
     osh_sink = OshSink(osh_file)
     osh_source = OshSource(osh_file)
