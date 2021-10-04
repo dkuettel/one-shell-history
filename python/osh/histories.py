@@ -65,9 +65,7 @@ def discover_archived_other_sources(basefolder: Path) -> list[Source]:
 
 
 if __name__ == "__main__":
-    sink, source = histories_from_folder_structure(
-        Path("histories"), Path("base.osh")
-    )
+    sink, source = histories_from_folder_structure(Path("histories"), Path("base.osh"))
     events = source.as_list()
     print(f"{len(events)=}")
     print(f"{events[-1]=}")

@@ -12,11 +12,13 @@ class OshFile:
     the format is json lines
     the file extension is osh, eg, history.osh
     the file only grows in lines, should make it easy to append and read when watching
+    only lines with a close new-line are ready to be read
     entries contain any of those keys
-        format, machine, description, event
+        format, description, event
     all but event overwrite a previous setting, event appends to events
+    a new format takes effect already in the current line
     event contains the keys
-        timestamp, command, duration, exit-code, folder, session
+        timestamp, command, duration, exit-code, folder, machine, session
     the only format currently is "osh-history-v1"
     """
 
@@ -39,7 +41,7 @@ class OshFile:
         file = self.file.expanduser()
         header = {
             "format": "osh-history-v1",
-            "machine": machine,
+            "description": None,
         }
         file.write_text(json.dumps(header) + "\n")
 
@@ -48,35 +50,40 @@ class OshFile:
         file = self.file.expanduser()
 
         meta_format = "osh-history-v1"
-        meta_machine = None
         meta_description = None
         events = []
 
         with file.open("rt") as lines:
             for line in lines:
                 if line == "\n":
+                    # we allow and ignore empty lines
                     continue
+                if not line.endswith("\n"):
+                    # we skip lines without \n as they are
+                    # a) the last line for sure
+                    # b) likely an yet-incomplete sync of a shared filesystem
+                    # c) and therefore probably not yet a full valid json
+                    break
                 line = json.loads(line)
 
                 if "format" in line:
                     meta_format = line["format"]
-                    assert meta_format == "osh-history-v1"
 
-                if "machine" in line:
-                    meta_machine = line["machine"]
+                assert meta_format == "osh-history-v1"
 
                 if "description" in line:
                     meta_description = line["description"]
 
                 if "event" in line:
-                    assert meta_machine is not None
-                    events.append(event_from_json_dict(line["event"], meta_machine))
+                    events.append(event_from_json_dict(line["event"]))
+
+                # TODO react/fail to any unexpected keys?
 
         return events
 
     def append_event(self, event: Event):
         file = self.file.expanduser()
-        json_str = json.dumps(event_to_json_dict(event))
+        json_str = json.dumps({"event": event_to_json_dict(event)})
         with file.open("at") as f:
             f.write(json_str + "\n")
 
@@ -98,7 +105,7 @@ def event_to_json_dict(event: Event) -> dict:
     return jd
 
 
-def event_from_json_dict(jd: dict, machine: str) -> Event:
+def event_from_json_dict(jd: dict) -> Event:
     # TODO sanity check that nothing is None?
     return Event(
         timestamp=datetime.datetime.fromisoformat(jd["timestamp"]),
@@ -106,6 +113,6 @@ def event_from_json_dict(jd: dict, machine: str) -> Event:
         duration=jd["duration"],
         exit_code=jd["exit-code"],
         folder=jd["folder"],
-        machine=machine,
+        machine=jd["machine"],
         session=jd["session"],
     )
