@@ -5,12 +5,21 @@ from typing import Tuple
 
 from osh.history import Event
 from osh.osh_file import OshFile
-from osh.sources import OshLegacySource, OshSource, Source, UnionSource
+from osh.sources import OshLegacySource, OshSource, Source, UnionSource, ZshSource
 
 
-class ArchivedOshSources(Source):
-    def __init__(self, path: Path):
+def archived_osh_sources(path: Path):
+    return ArchivedSources(path, ["osh", "osh-legacy"])
+
+
+def archived_other_sources(path: Path):
+    return ArchivedSources(path, ["zsh-history"])
+
+
+class ArchivedSources(Source):
+    def __init__(self, path: Path, suffixes: list[str]):
         self.path = path
+        self.suffixes = suffixes
         self.signature = None
         self.events = None
 
@@ -20,7 +29,7 @@ class ArchivedOshSources(Source):
 
     def maybe_refresh(self):
         has_data = self.events is not None
-        candidates = set(discover_candidates(self.path, ["osh", "osh-legacy"]))
+        candidates = set(discover_candidates(self.path, self.suffixes))
         is_same_signature = self.signature == candidates
         if has_data and is_same_signature:
             return
@@ -52,6 +61,8 @@ def maybe_load_candidates(
                 source = OshSource(OshFile(c.path))
             elif c.path.suffix == "osh-legacy":
                 source = OshLegacySource(c.path)
+            elif c.path.suffix == "zsh-history":
+                source = ZshSource(c.path)
             else:
                 assert False, c.path
             return source.as_list()
