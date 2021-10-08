@@ -40,6 +40,24 @@ def append_event_to_osh_file(file: Path, event: Event):
         f.write(json_str + "\n")
 
 
+def read_osh_legacy_file(file: Path, skip_imported: bool = True):
+    file = file.expanduser()
+    data = json.loads(file.read_text())
+
+    # NOTE the legacy (pre-release) data contains events:
+    # 1) imported from zsh -> usually skip
+    # 2) osh events with time resolution in seconds -> usually see it from timestamp
+    # 3) osh events with time resolution in microseconds -> usually see it from timestamp
+
+    # TODO Event.from_json_dict will go away, then need to do it here explicitely for the future
+    events = [Event.from_json_dict(event) for event in data]
+
+    if skip_imported:
+        events = [e for e in events if e.session is not None]
+
+    return events
+
+
 class FileChangedMuch(Exception):
     pass
 
