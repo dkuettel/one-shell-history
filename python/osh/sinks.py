@@ -1,5 +1,7 @@
+from pathlib import Path
+
 from osh.history import Event
-from osh.osh_file import OshFile
+from osh.osh_files import append_event_to_osh_file
 
 
 class Sink:
@@ -8,8 +10,8 @@ class Sink:
 
 
 class OshSink(Sink):
-    def __init__(self, osh_file: OshFile):
-        self.osh_file = osh_file
+    def __init__(self, path: Path):
+        self.path = path
 
     def append_event(self, event: Event):
-        self.osh_file.append_event(event)
+        append_event_to_osh_file(self.path, event)
