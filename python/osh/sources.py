@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from osh_zsh_files import read_zsh_file
+from osh.zsh_files import read_zsh_file
 
 from osh.history import Event
 from osh.osh_files import (
