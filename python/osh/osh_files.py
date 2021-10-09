@@ -1,7 +1,7 @@
 import datetime
 import json
 from pathlib import Path
-from typing import Generator, Iterable
+from typing import Iterable
 
 from osh.history import Event
 
@@ -71,7 +71,7 @@ class OshFileReader:
         self.last_tell = None
         self.last_line = None
 
-    def read_events(self) -> Generator[Event]:
+    def read_events(self) -> Iterable[Event]:
 
         file = self.file.resolve()
         stat = file.stat()
@@ -114,9 +114,7 @@ class OshFileReader:
                 if self.last_line != file.readline():
                     raise FileChangedMuch()
 
-            for line in file:
-                if not line.endswith("\n"):
-                    return
+            while (line := file.readline()).endswith("\n"):
 
                 self.last_tell = file.tell()
                 self.last_line = line
