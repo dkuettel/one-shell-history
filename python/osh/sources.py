@@ -8,145 +8,137 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from osh_zsh_files import read_zsh_file
+
 from osh.history import Event
-from osh.osh_file import OshFile
-
-
-class Source:
-    # TODO list or set? in a way set makes more sense? unless we want to expect a certain order already
-    # like assume it's deduplicated list ordered in ascending time? that's sofar the normal format in the rest of the code
-    def as_list(self) -> list[Event]:
-        raise NotImplementedError()
-
-
-class UnionSource(Source):
-    def __init__(
-        self,
-        sources: list[Source],
-        merge_sources: Optional[list[Source]] = None,
-    ):
-        self.sources = sources
-        self.merge_sources = merge_sources or []
-
-    def as_list(self) -> list[Event]:
-
-        events = [event for source in self.sources for event in source.as_list()]
-        merge_events = [
-            event for source in self.merge_sources for event in source.as_list()
-        ]
-
-        if len(merge_events) > 0:
-            # we generally assume that either osh was running or not
-            # so merging in 'merge_events' is only necessary
-            # in those posix timestamps (floored to seconds)
-            # that can't be found in 'events'
-            events_seconds = {
-                math.floor(event.timestamp.timestamp()) for event in events
-            }
-            # TODO some easy stats here to see if there is much after coming in, or restrict to last 10 days
-            # but how to warn, or return stats, or handle it with user notification?
-            # print(f"{min(events_seconds)=}")
-            # print(f"{len(merge_events)=}")
-            merge_events = [
-                event
-                for event in merge_events
-                if math.floor(event.timestamp.timestamp()) not in events_seconds
-            ]
-            # print(f"{len(merge_events)=}")
-            # merge_events_after = [event for event in merge_events if math.floor(event.timestamp.timestamp())>min(events_seconds)]
-            # print(f"{len(merge_events_after)=}")
-
-        return events + merge_events
-
-
-class OshSource(Source):
-    def __init__(self, osh_file: OshFile):
-        self.osh_file = osh_file
-
-    def as_list(self) -> list[Event]:
-        return self.osh_file.as_list()
-
-
-default_legacy_file = Path("~/.one-shell-history/events.json")
-
-
-class OshLegacySource(Source):
-    def __init__(self, file: Path = default_legacy_file, skip_imported: bool = True):
-        self.file = file
-        self.skip_imported = skip_imported
-
-    def as_list(self) -> list[Event]:
-
-        file = self.file.expanduser()
-        data = json.loads(file.read_text())
-
-        # NOTE the legacy (pre-release) data contains events:
-        # 1) imported from zsh -> usually skip
-        # 2) osh events with time resolution in seconds -> usually see it from timestamp
-        # 3) osh events with time resolution in microseconds -> usually see it from timestamp
-
-        # TODO Event.from_json_dict will go away, then need to do it here explicitely for the future
-        events = [Event.from_json_dict(event) for event in data]
-
-        if self.skip_imported:
-            events = [e for e in events if e.session is not None]
-
-        return events
-
-
-class CannotParse(Exception):
-    pass
-
-
-zsh_event_pattern = re.compile(
-    r"^: (?P<timestamp>\d+):(?P<duration>\d+);(?P<command>.*)$"
+from osh.osh_files import (
+    FileChangedMuch,
+    OshFileReader,
+    create_osh_file,
+    read_osh_file,
+    read_osh_legacy_file,
 )
 
 
-class ZshSource(Source):
-    def __init__(
-        self,
-        file: Path = Path("~/.zsh_history"),
-        machine: Optional[str] = None,
-    ):
-        self.file = file
-        self.machine = machine
+class Source:
+    def as_list(self) -> list[Event]:
+        raise NotImplementedError()
+
+    def as_sorted(self) -> list[Event]:
+        # TODO if it's too slow delegate to subclasses and make smart unions?
+        # also this assumes no real duplicate problem, then timestamps are unique enough for a stable ordering
+        return sorted(self.as_list(), key=lambda e: e.timestamp)
+
+
+class UnionSource(Source):
+    def __init__(self, sources: list[Source]):
+        self.sources = sources
 
     def as_list(self) -> list[Event]:
+        return [event for source in self.sources for event in source.as_list()]
 
-        # TODO i'm not sure if all zsh history are the format as below, or does it depend on zsh settings?
-        # maybe check what it looks like on a fresh system
-        # and/or see that we fail if not as expected
 
-        events = []
-        zsh_history = enumerate(
-            self.file.expanduser()
-            .read_text(encoding="utf-8", errors="replace")
-            .split("\n")[:-1],
-            start=1,
-        )
+class MergeInSource(Source):
+    """
+    we generally assume that the 'main' source has no collisions with itself
+    typically 'main' comes from osh sources, and you dont run multiple osh's on the same machine in parallel
+    in contrast, 'other' typically comes from traditional history implementations, like zsh's own history
+    they might have run in parallel, since you can have both zsh and osh record history at the same time
+    in short, duplicates within 'main' are not dealt with, but duplicates within 'other' and against 'main' are dealt with
+    """
 
-        for line, content in zsh_history:
-            match = zsh_event_pattern.fullmatch(content)
-            if match is None:
-                raise CannotParse(
-                    f"cannot parse around {self.file}:{line} = {json.dumps(content)}"
-                )
-            # from what I understand, zsh_history uses a posix time stamp, utc, second resolution (floor of float seconds)
-            timestamp = datetime.datetime.fromtimestamp(
-                int(match["timestamp"]), tz=datetime.timezone.utc
-            )
-            command = match["command"]
-            # note: duration in my zsh version 5.8 doesnt seem to be recorded correctly, its always 0
-            # duration = int(match.group("duration"))
-            while command.endswith("\\"):
-                line, content = next(zsh_history)
-                command = command[:-1] + "\n" + content
-            event = Event(timestamp=timestamp, command=command, machine=self.machine)
+    def __init__(self, main: Source, other: Source):
+        self.main = main
+        self.other = other
 
-            events.append(event)
+    def as_list(self):
 
-        return events
+        events = self.main.as_list()
+        candidates = self.other.as_list()
+
+        if len(candidates) == 0:
+            return events
+
+        # zsh and bash seem to use a posix timestamp floored to seconds
+        # therefore these are the seconds when 'main' was recording
+        # and we dont need to use 'other' to complete our history
+        # (this is a somehwat crude heuristics in order to be efficient)
+        covered_seconds = {math.floor(event.timestamp.timestamp()) for event in events}
+
+        # TODO some easy stats here to see if there is much after coming in, or restrict to last 10 days
+        # but how to warn, or return stats, or handle it with user notification?
+        # print(f"{min(events_seconds)=}")
+        # print(f"{len(merge_events)=}")
+        additional = [
+            event
+            for event in candidates
+            if math.floor(event.timestamp.timestamp()) not in covered_seconds
+        ]
+        # print(f"{len(merge_events)=}")
+        # merge_events_after = [event for event in merge_events if math.floor(event.timestamp.timestamp())>min(events_seconds)]
+        # print(f"{len(merge_events_after)=}")
+
+        return events + additional
+
+
+class OshSource(Source):
+    def __init__(self, path: Path):
+        self.path = path
+
+    def as_list(self) -> list[Event]:
+        try:
+            return read_osh_file(self.path)
+        except FileNotFoundError:
+            return []
+
+
+class IncrementalOshSource(Source):
+    def __init__(self, path: Path):
+        self.path = path
+        self.reader = None
+        self.events = None
+
+    def as_list(self):
+        if self.reader is None:
+            self.reader = OshFileReader(self.path)
+            self.events = []
+
+        try:
+            self.events.extend(self.reader.read_events())
+            return self.events
+
+        except FileNotFoundError:
+            self.reader = None
+            self.events = []
+            return self.events
+
+        except FileChangedMuch:
+            self.reader = None
+            self.events = None
+            return self.as_list()
+
+
+class OshLegacySource(Source):
+    def __init__(self, path: Path):
+        self.path = path
+
+    def as_list(self):
+        try:
+            return read_osh_legacy_file(self.path)
+        except FileNotFoundError:
+            # TODO i'm not sure now, return [] or last data here? [] would be probably better
+            return []
+
+
+class ZshSource(Source):
+    def __init__(self, path: Path):
+        self.path = path
+
+    def as_list(self):
+        try:
+            return read_zsh_file(self.path)
+        except FileNotFoundError:
+            return []
 
 
 if __name__ == "__main__":
