@@ -1,6 +1,12 @@
+black ~= 21.8b0
 click ~= 8.0.1
 gitpython ~= 3.1.18
 ipython ~= 7.27.0
-tabulate ~= 0.8.9
-black ~= 21.8b0
 isort ~= 5.9.3
+line_profiler ~= 3.3.1
+pprofile ~= 2.1.0
+pyinstrument ~= 4.0.4
+pyprof2calltree ~= 1.4.5
+snakeviz ~= 2.1.0
+tabulate ~= 0.8.9
+tuna ~= 0.5.9
