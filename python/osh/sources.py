@@ -108,7 +108,10 @@ class OshSource(Source):
             return []
 
     def mtime(self):
-        return self.path.stat().st_mtime
+        try:
+            return self.path.stat().st_mtime
+        except FileNotFoundError:
+            return time.time()
 
 
 class IncrementalOshSource(Source):
@@ -137,7 +140,10 @@ class IncrementalOshSource(Source):
             return self.as_list()
 
     def mtime(self):
-        return self.path.stat().st_mtime
+        try:
+            return self.path.stat().st_mtime
+        except FileNotFoundError:
+            return time.time()
 
 
 class OshLegacySource(Source):
@@ -152,7 +158,10 @@ class OshLegacySource(Source):
             return []
 
     def mtime(self):
-        return self.path.stat().st_mtime
+        try:
+            return self.path.stat().st_mtime
+        except FileNotFoundError:
+            return time.time()
 
 
 class ZshSource(Source):
@@ -166,7 +175,10 @@ class ZshSource(Source):
             return []
 
     def mtime(self):
-        return self.path.stat().st_mtime
+        try:
+            return self.path.stat().st_mtime
+        except FileNotFoundError:
+            return time.time()
 
 
 class CachedSource(Source):
