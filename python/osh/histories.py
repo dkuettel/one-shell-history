@@ -1,4 +1,5 @@
 import itertools
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Generator, Optional, Tuple
@@ -63,6 +64,9 @@ class DiscoveredSources(Source):
             return
         self.sources = new_sources
         self.union = UnionSource(list(self.sources.values()))
+
+    def mtime(self):
+        return self.sources.mtime()
 
 
 def make_source(path: Path) -> Source:

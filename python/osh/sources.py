@@ -4,11 +4,10 @@ import datetime
 import json
 import math
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
-
-from osh.zsh_files import read_zsh_file
 
 from osh.history import Event
 from osh.osh_files import (
@@ -18,6 +17,7 @@ from osh.osh_files import (
     read_osh_file,
     read_osh_legacy_file,
 )
+from osh.zsh_files import read_zsh_file
 
 
 class Source:
@@ -29,13 +29,26 @@ class Source:
         # also this assumes no real duplicate problem, then timestamps are unique enough for a stable ordering
         return sorted(self.as_list(), key=lambda e: e.timestamp)
 
+    def mtime(self) -> float:
+        """return a time.time()-like modified time, or just like Path.stat().st_mtime, relative to the context of this source"""
+        raise NotImplementedError()
+
 
 class UnionSource(Source):
+    """
+    do not change the list of sources afterwards
+    instead make a new UnionSource
+    """
+
     def __init__(self, sources: list[Source]):
+        self.ctime = time.time()
         self.sources = sources
 
     def as_list(self) -> list[Event]:
         return [event for source in self.sources for event in source.as_list()]
+
+    def mtime(self):
+        return max(self.ctime, max(s.mtime() for s in self.sources))
 
 
 class MergeInSource(Source):
@@ -80,6 +93,9 @@ class MergeInSource(Source):
 
         return events + additional
 
+    def mtime(self):
+        return max(self.main.mtime, self.other.mtime)
+
 
 class OshSource(Source):
     def __init__(self, path: Path):
@@ -90,6 +106,9 @@ class OshSource(Source):
             return read_osh_file(self.path)
         except FileNotFoundError:
             return []
+
+    def mtime(self):
+        return self.path.stat().st_mtime
 
 
 class IncrementalOshSource(Source):
@@ -117,6 +136,9 @@ class IncrementalOshSource(Source):
             self.events = None
             return self.as_list()
 
+    def mtime(self):
+        return self.path.stat().st_mtime
+
 
 class OshLegacySource(Source):
     def __init__(self, path: Path):
@@ -129,6 +151,9 @@ class OshLegacySource(Source):
             # TODO i'm not sure now, return [] or last data here? [] would be probably better
             return []
 
+    def mtime(self):
+        return self.path.stat().st_mtime
+
 
 class ZshSource(Source):
     def __init__(self, path: Path):
@@ -139,6 +164,35 @@ class ZshSource(Source):
             return read_zsh_file(self.path)
         except FileNotFoundError:
             return []
+
+    def mtime(self):
+        return self.path.stat().st_mtime
+
+
+class CachedSource(Source):
+    def __init__(self, source: Source, min_delay: float = 5.0):
+        self.source = source
+        self.min_delay = min_delay
+        self.check_time = time.time()
+        self.cached_mtime = time.time()
+        self.cached_events = self.source.as_list()
+
+    def as_list(self):
+        self.maybe_refresh()
+        return self.cached_events
+
+    def mtime(self):
+        self.maybe_refresh()
+        return self.cached_mtime
+
+    def maybe_refresh(self):
+        if time.time() - self.check_time < self.min_delay:
+            return
+        mtime = self.source.mtime()
+        if mtime == self.cached_mtime:
+            return
+        self.cached_mtime = mtime
+        self.cached_events = self.source.as_list()
 
 
 if __name__ == "__main__":
