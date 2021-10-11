@@ -83,13 +83,25 @@ class RelevantEvents:
 
 
 if __name__ == "__main__":
+    import time
     from pathlib import Path
 
     from osh.sources import IncrementalSource
 
     source = IncrementalSource(Path("histories"))
     rels = RelevantEvents(source)
+
+    dt = time.time()
     events = list(reversed(rels.as_relevant_first()))
     events = events[-10:]
     for e in events:
         print(e.occurence_count, e.command)
+    print(f"took {time.time()-dt}")
+
+    print()
+    dt = time.time()
+    events = list(reversed(rels.as_relevant_first()))
+    events = events[-10:]
+    for e in events:
+        print(e.occurence_count, e.command)
+    print(f"took {time.time()-dt}")
