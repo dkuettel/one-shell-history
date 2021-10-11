@@ -30,7 +30,7 @@ def create_osh_file(file: Path):
 
 
 def read_osh_file(file: Path):
-    return [event for event in OshFileReader(file).read_events()]
+    return list(OshFileReader(file).read_events())
 
 
 def append_event_to_osh_file(file: Path, event: Event):
@@ -58,7 +58,7 @@ def read_osh_legacy_file(file: Path, skip_imported: bool = True):
     return events
 
 
-class FileChangedMuch(Exception):
+class OshFileChangedMuch(Exception):
     pass
 
 
@@ -87,16 +87,16 @@ class OshFileReader:
             self.last_line = None
             return self._generate()
 
-        if self.last_file != self.file:
-            raise FileChangedMuch()
+        if self.last_file != file:
+            raise OshFileChangedMuch(self.file)
 
-        if self.last_mtime != stat.mtime and self.last_size < stat.st_size:
+        if self.last_mtime != stat.st_mtime and self.last_size < stat.st_size:
             self.last_mtime = stat.st_mtime
             self.last_size = stat.st_size
             return self._generate()
 
-        if self.last_mtime != stat.mtime and self.last_size >= stat.st_size:
-            raise FileChangedMuch()
+        if self.last_mtime != stat.st_mtime and self.last_size >= stat.st_size:
+            raise OshFileChangedMuch(self.file)
 
         def nothing():
             yield from []
@@ -112,7 +112,7 @@ class OshFileReader:
             file.seek(self.last_tell)
             if self.last_line is not None:
                 if self.last_line != file.readline():
-                    raise FileChangedMuch()
+                    raise OshFileChangedMuch(self.file)
 
             while (line := file.readline()).endswith("\n"):
 
