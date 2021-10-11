@@ -301,3 +301,72 @@ class SearchConfig:
         self._read()
         self._config["ignored-commands"].append(command)
         self._write()
+class RelevantEvents:
+    """
+    dont change filter_ignored after instantiation
+    """
+
+    def __init__(
+        self, source, filter_failed_at: float = 1.0, filter_ignored: bool = True
+    ):
+        self.source = source
+        self.filter_failed_at = filter_failed_at
+        self.filter_ignored = filter_ignored
+        self.config = todo
+        self.aggs = {}
+
+    def as_relevant_first(self):
+
+        try:
+            events = self.source.generate_new_events()
+        except SourceIsNotIncremental:
+            events = self.source.generate_all_events()
+            self.aggs = {}
+
+        for event in events:
+            self.update(event)
+
+        relevants = self.aggs.values()
+
+        # TODO filter_failed_at is also more bumpy as anything can happen (up and down)
+        # unless we think about the max length of after I guess
+        if self.filter_failed_at is not None:
+            relevants = (
+                e
+                for e in relevants
+                if (e.fail_ratio is None) or (e.fail_ratio < self.filter_failed_at)
+            )
+
+        # TODO can we handle it somehow that not the full list needs sorting everytime
+        relevants = sorted(relevants, key=lambda e: -e.occurence_count)
+        return relevants
+
+    def update(self, event):
+
+        if not self.config.event_is_useful(event):
+            return
+
+        agg = self.aggs.get(event.command, None)
+
+        if agg is None:
+            agg = AggregatedEvent(
+                most_recent_timestamp=event.timestamp,
+                command=event.command,
+                occurence_count=1,
+                known_exit_count=0 if event.exit_code is None else 1,
+                failed_exit_count=0 if event.exit_code in {0, None} else 1,
+                folders=Counter({event.folder}),
+                most_recent_folder=event.folder,
+            )
+            self.aggs[event.command] = agg
+
+        else:
+            if event.timestamp > agg.most_recent_timestamp:
+                agg.most_recent_timestamp = event.timestamp
+                agg.most_recent_folder = event.folder
+            agg.occurence_count += 1
+            if event.exit_code is not None:
+                agg.known_exit_count += 1
+                if event.exit_code != 0:
+                    agg.failed_exit_count += 1
+            agg.folders.update({event.folder})
