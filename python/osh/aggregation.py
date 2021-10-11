@@ -1,6 +1,6 @@
 from collections import Counter
 
-from osh.history import AggregatedEvent
+from osh.history import AggregatedEvent, SearchConfig, aggregate_events
 
 
 class RelevantEvents:
@@ -17,7 +17,7 @@ class RelevantEvents:
         self.source = source
         self.filter_failed_at = filter_failed_at
         self.filter_ignored = filter_ignored
-        self.config = None  # TODO
+        self.config = SearchConfig()  # TODO
         self.aggs = {}
 
     def as_relevant_first(self):
@@ -53,8 +53,8 @@ class RelevantEvents:
 
     def update(self, event):
 
-        # if not self.config.event_is_useful(event):
-        #     return
+        if not self.config.event_is_useful(event):
+            return
 
         agg = self.aggs.get(event.command, None)
 
@@ -82,7 +82,43 @@ class RelevantEvents:
             agg.folders.update({event.folder})
 
 
-if __name__ == "__main__":
+def test_against_old_implementation():
+    from pathlib import Path
+
+    from osh.sources import IncrementalSource
+
+    source = IncrementalSource(Path("histories"))
+    assert source.needs_reload()
+    events = source.get_all_events()
+    events = sorted(events, key=lambda e: e.timestamp)
+
+    old = aggregate_events(events)
+
+    source = IncrementalSource(Path("histories"))
+    rels = RelevantEvents(source)
+    new = list(rels.as_relevant_first())
+    newer = list(rels.as_relevant_first())
+    assert new == newer
+
+    old = sorted(
+        old, key=lambda e: (-e.occurence_count, e.most_recent_timestamp, e.command)
+    )
+    new = sorted(
+        new, key=lambda e: (-e.occurence_count, e.most_recent_timestamp, e.command)
+    )
+
+    for i, (a, b) in enumerate(zip(old, new)):
+        if a != b:
+            print(i)
+            print(a)
+            print(b)
+            print()
+            break
+
+    assert old == new
+
+
+def test():
     import time
     from pathlib import Path
 
@@ -105,3 +141,8 @@ if __name__ == "__main__":
     for e in events:
         print(e.occurence_count, e.command)
     print(f"took {time.time()-dt}")
+
+
+if __name__ == "__main__":
+    # test()
+    test_against_old_implementation()
