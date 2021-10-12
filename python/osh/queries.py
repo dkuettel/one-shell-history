@@ -1,29 +1,78 @@
+import json
+import re
+import time
 from collections import Counter
+from pathlib import Path
+from typing import Optional
 
-from osh.history import AggregatedEvent, SearchConfig, aggregate_events
+from osh.history import AggregatedEvent, SearchConfig
+from osh.osh_files import OshFileChangedMuch
 
 
-class RelevantEvents:
-    """
-    dont change filter_ignored after instantiation
-    """
+class EventFilter:
+    def has_changed(self) -> bool:
+        return False
 
-    def __init__(
-        self,
-        source,
-        filter_failed_at: float = 1.0,
-        filter_ignored: bool = True,
-    ):
+    def discard(self, event) -> bool:
+        return False
+
+
+class UserEventFilter(EventFilter):
+    def __init__(self, path: Path):
+        self.path = path
+        self.last_mtime = None
+        self.last_size = None
+        self.ignored_commands = set()
+        self.boring_patterns = set()
+
+    def has_changed(self):
+        try:
+            stat = self.path.stat()
+            if (self.last_mtime, self.last_size) == (stat.st_mtime, stat.st_size):
+                return False
+
+            self.last_mtime = stat.st_mtime
+            self.last_size = stat.st_size
+
+            config = json.loads(self.path.read_text())
+            ignored_commands = set(config.get("ignored-commands", []))
+            boring_patterns = {re.compile(p) for p in config.get("boring-patterns", [])}
+
+        except FileNotFoundError:
+            ignored_commands = set()
+            boring_patterns = set()
+
+        if (
+            self.ignored_commands == ignored_commands
+            and self.boring_patterns == boring_patterns
+        ):
+            return False
+
+        self.ignored_commands = ignored_commands
+        self.boring_patterns = boring_patterns
+        return True
+
+    def discard(self, event):
+        if event.command in self.ignored_commands:
+            return True
+        for pattern in self.boring_patterns:
+            if pattern.fullmatch(event.command):
+                return True
+        return False
+
+
+class UniqueCommandsQuery:
+    def __init__(self, source, event_filter: EventFilter = EventFilter()):
         self.source = source
-        self.filter_failed_at = filter_failed_at
-        self.filter_ignored = filter_ignored
-        self.config = SearchConfig()  # TODO
+        self.event_filter = event_filter
         self.aggs = {}
 
-    def as_relevant_first(self):
-        from osh.osh_files import OshFileChangedMuch
+    def as_most_often_first(self, filter_failed_at: Optional[float] = None):
 
-        if self.source.needs_reload():
+        needs_reload = self.source.needs_reload()
+        filter_has_changed = self.event_filter.has_changed()
+
+        if needs_reload or filter_has_changed:
             events = self.source.get_all_events()
             self.aggs = {}
         else:
@@ -38,22 +87,19 @@ class RelevantEvents:
 
         relevants = self.aggs.values()
 
-        # TODO filter_failed_at is also more bumpy as anything can happen (up and down)
-        # unless we think about the max length of after I guess
-        if self.filter_failed_at is not None:
+        if filter_failed_at is not None:
             relevants = (
                 e
                 for e in relevants
                 if (e.fail_ratio is None) or (e.fail_ratio < self.filter_failed_at)
             )
 
-        # TODO can we handle it somehow that not the full list needs sorting everytime
         relevants = sorted(relevants, key=lambda e: -e.occurence_count)
         return relevants
 
     def update(self, event):
 
-        if not self.config.event_is_useful(event):
+        if self.event_filter.discard(event):
             return
 
         agg = self.aggs.get(event.command, None)
@@ -82,42 +128,6 @@ class RelevantEvents:
             agg.folders.update({event.folder})
 
 
-def test_against_old_implementation():
-    from pathlib import Path
-
-    from osh.sources import IncrementalSource
-
-    source = IncrementalSource(Path("histories"))
-    assert source.needs_reload()
-    events = source.get_all_events()
-    events = sorted(events, key=lambda e: e.timestamp)
-
-    old = aggregate_events(events)
-
-    source = IncrementalSource(Path("histories"))
-    rels = RelevantEvents(source)
-    new = list(rels.as_relevant_first())
-    newer = list(rels.as_relevant_first())
-    assert new == newer
-
-    old = sorted(
-        old, key=lambda e: (-e.occurence_count, e.most_recent_timestamp, e.command)
-    )
-    new = sorted(
-        new, key=lambda e: (-e.occurence_count, e.most_recent_timestamp, e.command)
-    )
-
-    for i, (a, b) in enumerate(zip(old, new)):
-        if a != b:
-            print(i)
-            print(a)
-            print(b)
-            print()
-            break
-
-    assert old == new
-
-
 def test():
     import time
     from pathlib import Path
@@ -125,10 +135,13 @@ def test():
     from osh.sources import IncrementalSource
 
     source = IncrementalSource(Path("histories"))
-    rels = RelevantEvents(source)
+    event_filter = UserEventFilter(
+        Path("~/.one-shell-history/search.json").expanduser()
+    )
+    rels = UniqueCommandsQuery(source, event_filter)
 
     dt = time.time()
-    events = list(reversed(rels.as_relevant_first()))
+    events = list(reversed(rels.as_most_often_first()))
     events = events[-10:]
     for e in events:
         print(e.occurence_count, e.command)
@@ -136,7 +149,7 @@ def test():
 
     print()
     dt = time.time()
-    events = list(reversed(rels.as_relevant_first()))
+    events = list(reversed(rels.as_most_often_first()))
     events = events[-10:]
     for e in events:
         print(e.occurence_count, e.command)
@@ -144,5 +157,4 @@ def test():
 
 
 if __name__ == "__main__":
-    # test()
-    test_against_old_implementation()
+    test()
