@@ -191,3 +191,6 @@ if __name__ == "__main__":
     events = source.get_all_events()
     print(f"{len(events)=}")
     print(f"{events[-1]=}")
+    print(f"{source.needs_reload()=}")
+    new_events = list(source.get_new_events())
+    print(f"{len(new_events)=}")
