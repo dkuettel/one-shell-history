@@ -10,6 +10,7 @@ if [[ $USER == 'root' ]]; then
 fi
 
 export base=${0:a:h}
+# TODO check if user installs are possible
 cat $base/one-shell-history@.service \
     | envsubst \
     | sudo tee /etc/systemd/system/one-shell-history@$USER.service
