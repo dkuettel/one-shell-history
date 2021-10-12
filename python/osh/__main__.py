@@ -44,6 +44,15 @@ class DirectConfig:
         sink = OshSink(Path("histories/base.osh"))
         sink.append_event(event)
 
+    def get_statistics(self):
+        source = self.get_new_source()
+        source.needs_reload()  # TODO ah well so unexpected :/
+        events = source.get_all_events()
+        count = len(events)
+        earliest = min(e.timestamp for e in events)
+        most_recent = max(e.timestamp for e in events)
+        return count, earliest, most_recent
+
 
 config = None
 
@@ -198,6 +207,18 @@ def append_event(
     )
 
     config.append_event(event)
+
+
+@cli.command()
+def stats():
+    count, earliest, most_recent = config.get_statistics()
+    days = round((most_recent - earliest).total_seconds() / (60 * 60 * 24))
+    per_day = round(count / days)
+    print("Your history contains")
+    print(f"  {count:,} events")
+    print(f"  over {days:,} days")
+    print(f"  between {earliest.date()} and {most_recent.date()}.")
+    print(f"That's an incredible {per_day} commands per day, Commander.")
 
 
 @cli.command()
