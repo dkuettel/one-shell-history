@@ -1,3 +1,34 @@
+
+I dont like the brittle interface I have right now with changes and incremental sources ...
+is there something with hashes and see what changed?
+at least for the search config we could have the hash to know if it changed, instead of a mtime thing
+or we make it has_changed, and reset_has_changed or so? to be explicit?
+
+probably dont need OshFile anymore now that it detours over filesystem
+
+benchmark:
+- pip install vmprof
+- needed apt python-dev or python3.0-dev ?
+- also needed libunwind-dev
+
+format:
+x to handle slow/messy shared filesystems, accept only a line that is done, with a newline
+x that means there will be a last empty line in splitting (?)
+x also move the machine="base" back into the event, easier than state in the format
+
+pylint
+
+git-sync:
+- easiest if we dont do anything, completely in the hand of the user
+- works at first
+- other option is a periodic push/puller
+- and the user makes sure there is only one per any shared filesystem
+- a bit bumpy but already better
+- last we could for shared filesystems have some kind of git.flag file (json) that marks intention with a uuid
+- and other check that, with enough slack time, this way they shouldnt step on each others toes
+- but at the same time another one should pickup if one is gone (stale json with no updates within grace-time)
+
+
 move master to main also on remote? I think yves needs to know then (?)
 
 in-memory:
