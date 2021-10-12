@@ -202,6 +202,9 @@ def fzf_select(ctx, query, filter_failed, filter_ignored):
         expect="enter,ctrl-c,ctrl-x,ctrl-r",
         tiebreak="index",
         # TODO --read0 and we could have newlines in the data? also then --print0?
+        # lets see how it looks with newlines, could be convenient
+        # not just useful for command that have new lines (which we need to escape now)
+        # also for meta info like folders would be easier now
     )
 
     if result.key == "enter":
