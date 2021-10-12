@@ -1,0 +1,13 @@
+#!/bin/zsh
+set -eu -o pipefail
+
+base=${0:a:h}/..
+base=${base:a}
+cd $base
+
+folder=$base/.venv
+path=($folder/bin $path)
+export VIRTUAL_ENV=$folder
+export PYTHONPATH=python
+
+python -m osh $@
