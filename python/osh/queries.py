@@ -91,7 +91,7 @@ class UniqueCommandsQuery:
             relevants = (
                 e
                 for e in relevants
-                if (e.fail_ratio is None) or (e.fail_ratio < self.filter_failed_at)
+                if (e.fail_ratio is None) or (e.fail_ratio < filter_failed_at)
             )
 
         relevants = sorted(relevants, key=lambda e: -e.occurence_count)
