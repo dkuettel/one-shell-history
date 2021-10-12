@@ -286,16 +286,18 @@ class SearchConfig:
             self._config = dict(self._empty_config)
         assert self._config["version"] == "1"
         self._write()
+        self.ignored_commands = set(self._config["ignored-commands"])
+        self.boring_patterns = [re.compile(p) for p in self._config["boring-patterns"]]
 
     def _write(self):
         self._path.write_text(json.dumps(self._config, indent=4))
 
     def event_is_useful(self, event: Event) -> bool:
         # TODO hacky, should check if config file has changed the first time
-        if event.command in self._config["ignored-commands"]:
+        if event.command in self.ignored_commands:
             return False
-        for pattern in self._config["boring-patterns"]:
-            if re.fullmatch(pattern, event.command):
+        for pattern in self.boring_patterns:
+            if pattern.fullmatch(event.command):
                 return False
         return True
 
