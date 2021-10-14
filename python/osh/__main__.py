@@ -8,6 +8,7 @@ import click
 
 from osh.fzf import fzf
 from osh.history import Event
+from osh.osh_files import append_event_to_osh_file
 from osh.queries import BackwardsQuery, UniqueCommandsQuery, UserEventFilter
 from osh.sinks import OshSink
 from osh.sources import HistorySource
@@ -47,8 +48,7 @@ class DirectConfig:
         yield from self.backwards_query.generate_events(session_id)
 
     def append_event(self, event: Event):
-        sink = OshSink(Path("histories/base.osh"))
-        sink.append_event(event)
+        append_event_to_osh_file(Path("histories/base.osh"), event)
 
     def get_statistics(self):
         source = self.source
