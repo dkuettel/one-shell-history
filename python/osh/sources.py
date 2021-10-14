@@ -12,6 +12,7 @@ from typing import Callable, Optional, Tuple
 
 from osh.history import Event
 from osh.osh_files import (
+    OshFileChangedMuch,
     OshFileReader,
     create_osh_file,
     read_osh_file,
@@ -20,135 +21,156 @@ from osh.osh_files import (
 from osh.zsh_files import read_zsh_file
 
 
-class IncrementalSource:
-    """
-    the interface here and with the other source is a bit fragile
-    you need to first call needs_reload
-    and then if true, you need to call get_all_events
-    otherwise call get_new_events
-    needs_reload says only if it needs reloading since last time you called needs_reload
-    not since last time you did any of get_*_events
-    """
-
+# TODO will go to another place?
+class History:
     def __init__(self, path: Path):
         self.path = path
-        self.archived = ArchivedSources(path / "archive")
+        self.archived_osh = ArchivedSources(
+            path / "archive",
+            ["**/*.osh", "**/*.osh_legacy"],
+        )
+        self.archived_other = ArchivedSources(
+            path / "archive",
+            ["**/*.zsh_history"],
+        )
         self.active = ActiveSources(path)
+        self.revision = 0
+        self.events = []
+        self.signature = (
+            self.archived_osh.revision,
+            self.archived_other.revision,
+            self.active.revision,
+        )
+        self.active_length = 0
 
-    def needs_reload(self):
-        # TODO very brittle :/ see class doc, maybe there is a more robust way without much code?
-        # otherwise call it check instead of state-y?
-        archived = self.archived.needs_reload()
-        active = self.active.needs_reload()
-        return archived or active
+    def refresh(self):
+        self.archived_osh.refresh()
+        self.archived_other.refresh()
 
-    def get_all_events(self):
-        archived_osh, archived_other = self.archived.get_all_events()
-        active_osh = self.active.get_all_events()
-        events = merge_other_into_main(archived_other, archived_osh + active_osh)
-        return events
+        signature = (
+            self.archived_osh.revision,
+            self.archived_other.revision,
+            self.active.revision,
+        )
+        active_length = len(self.active.events)
 
-    def get_new_events(self):
-        return self.active.get_new_events()
+        if signature == self.signature and active_length == self.active_length:
+            return
 
+        if signature == self.signature and active_length != self.active_length:
+            new_events = sorted(
+                self.active.events[self.active_length :],
+                key=lambda e: e.timestamp,
+            )
+            if (len(self.events) == 0) or (
+                self.events[-1].timestamp <= new_events[0].timestamp
+            ):
+                self.events.extend(new_events)
+                self.active_length = active_length
+                return
 
-@dataclass(frozen=True)
-class DiscoveredArchiveFile:
-    path: Path
-    size: int
-    mtime: float
+        self.revision += 1
+        self.signature = signature
+        self.active_length = active_length
 
-    @classmethod
-    def from_path(cls, path: Path):
-        stat = path.stat()
-        return cls(path, stat.st_size, stat.st_mtime)
+        events = merge_other_into_main(
+            self.archived_other.events,
+            self.archived_osh.events + self.active.events,
+        )
+        self.events = sorted(events, key=lambda e: e.timestamp)
 
 
 class ArchivedSources:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, globs: str):
         self.path = path
+        self.globs = globs
+        self.revision = 0
+        self.events = []
+        self.signature = set()
         self.last_check = -math.inf
         self.min_delay = 10
-        self.files = None
 
-    def needs_reload(self):
+    def refresh(self):
+
         now = time.time()
         if now - self.last_check < self.min_delay:
-            return False
+            return
         self.last_check = now
-        files = self.discover_files()
-        if files == self.files:
-            return False
-        self.files = files
-        return True
 
-    def get_all_events(self):
-        osh, other = [], []
-        for dfile in self.files:
+        def sig(f):
+            assert not f.is_symlink()
+            stat = f.stat()
+            return (f, stat.st_size, stat.st_mtime)
+
+        signature = {sig(f) for glob in self.globs for f in self.path.glob(glob)}
+
+        if signature == self.signature:
+            return
+        self.revision += 1
+
+        self.events = []
+        self.signature = set()
+        for f, size, mtime in signature:
             try:
-                if dfile.path.suffix == ".osh":
-                    osh.extend(read_osh_file(dfile.path))
-                elif dfile.path.suffix == ".osh_legacy":
-                    osh.extend(read_osh_legacy_file(dfile.path))
-                elif dfile.path.suffix == ".zsh_history":
-                    other.extend(read_zsh_file(dfile.path))
-                else:
-                    raise Exception(f"unknown type of history {dfile.path}")
+                self.events.extend(read_any_file(f))
+                self.signature.add((f, size, mtime))
             except FileNotFoundError:
                 pass
-        return osh, other
-
-    def discover_files(self):
-        glob = itertools.chain(
-            self.path.glob("**/*.osh"),
-            self.path.glob("**/*.osh_legacy"),
-            self.path.glob("**/*.zsh_history"),
-        )
-        return {DiscoveredArchiveFile.from_path(p) for p in glob}
 
 
 class ActiveSources:
     def __init__(self, path: Path):
         self.path = path
+        self.revision = 0
+        self.events = []
+        self.signature = set()
+        self.readers = []
         self.last_check = -math.inf
-        self.min_delay = 10
-        self.files = None
+        self.min_delay = 1
 
-    def needs_reload(self):
+    def refresh(self):
+
         now = time.time()
         if now - self.last_check < self.min_delay:
-            return False
+            return
         self.last_check = now
-        files = self.discover_files()
-        if files == self.files:
-            return False
-        self.files = files
-        return True
 
-    def get_all_events(self):
-        self.readers = [OshFileReader(f) for f in self.files]
-        return list(self.get_new_events())
+        signature = set(self.path.glob("*.osh"))
+        assert all(not f.is_symlink() for f in signature)
 
-    def get_new_events(self):
-        for reader in self.readers:
-            yield from reader.read_events()
+        if signature == self.signature:
+            try:
+                for r in self.readers:
+                    self.events.extend(r.get_new_events())
+            except OshFileChangedMuch:
+                pass
+            else:
+                return
 
-    def discover_files(self):
-        return set(self.path.glob("*.osh"))
+        self.revision += 1
+        self.events = []
+        self.signature = set()
+        self.readers = []
+
+        for f in signature:
+            try:
+                r = OshFileReader(f)
+                self.events.extend(r.get_new_events())
+                self.signature.add(f)
+                self.readers.add(r)
+            except FileNotFoundError:
+                pass
 
 
-class Source:
-    def as_list(self) -> list[Event]:
-        raise NotImplementedError()
-
-    def as_sorted(self) -> list[Event]:
-        # TODO if it's too slow delegate to subclasses and make smart unions?
-        # also this assumes no real duplicate problem, then timestamps are unique enough for a stable ordering
-        return sorted(self.as_list(), key=lambda e: e.timestamp)
-
-    def mtime(self) -> float:
-        """return a time.time()-like modified time, or just like Path.stat().st_mtime, relative to the context of this source"""
-        raise NotImplementedError()
+def read_any_file(file: Path) -> list[Event]:
+    if file.suffix == ".osh":
+        return read_osh_file(file)
+    elif file.suffix == ".osh_legacy":
+        return read_osh_legacy_file(file)
+    elif file.suffix == ".zsh_history":
+        return read_zsh_file(file)
+    else:
+        raise Exception(f"unknown type of history {file}")
 
 
 def merge_other_into_main(other, main):
@@ -186,11 +208,14 @@ def merge_other_into_main(other, main):
 
 
 if __name__ == "__main__":
-    source = IncrementalSource(Path("histories"))
-    print(f"{source.needs_reload()=}")
-    events = source.get_all_events()
+    history = History(Path("histories"))
+    history.refresh()
+    print(f"{history.revision=}")
+    events = history.events
     print(f"{len(events)=}")
     print(f"{events[-1]=}")
-    print(f"{source.needs_reload()=}")
-    new_events = list(source.get_new_events())
-    print(f"{len(new_events)=}")
+    history.refresh()
+    print(f"{history.revision=}")
+    events = history.events
+    print(f"{len(events)=}")
+    print(f"{events[-1]=}")
