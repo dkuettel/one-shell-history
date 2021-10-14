@@ -1,16 +1,16 @@
-import functools
 import sys
 import time
 from datetime import datetime, timedelta, timezone
+from functools import cache, cached_property
 from pathlib import Path
 
 import click
 
 from osh.fzf import fzf
-from osh.history import Event, LazyHistory, SearchConfig, aggregate_events
+from osh.history import Event
 from osh.queries import UniqueCommandsQuery, UserEventFilter
 from osh.sinks import OshSink
-from osh.sources import IncrementalSource
+from osh.sources import HistorySource
 from osh.utils import seconds_to_slang, str_mark_trailing_spaces
 
 
@@ -22,21 +22,20 @@ class DirectConfig:
     def __init__(self):
         pass
 
-    def get_new_source(self):
-        return IncrementalSource(Path("histories"))
+    @cached_property
+    def source(self):
+        return HistorySource(Path("histories"))
 
-    @functools.cache
+    @cache
     def unique_commands_query(self, filter_ignored: bool):
         if filter_ignored:
             config_path = Path("~/.one-shell-history/search.json").expanduser()
-            return UniqueCommandsQuery(
-                self.get_new_source(), UserEventFilter(config_path)
-            )
+            return UniqueCommandsQuery(self.source, UserEventFilter(config_path))
         else:
-            return UniqueCommandsQuery(self.get_new_source())
+            return UniqueCommandsQuery(self.source)
 
     def aggregate_events(self, filter_failed_at, filter_ignored):
-        return self.unique_commands_query(filter_ignored).as_most_often_first(
+        yield from self.unique_commands_query(filter_ignored).generate_events(
             filter_failed_at
         )
 
@@ -45,9 +44,9 @@ class DirectConfig:
         sink.append_event(event)
 
     def get_statistics(self):
-        source = self.get_new_source()
-        source.needs_reload()  # TODO ah well so unexpected :/
-        events = source.get_all_events()
+        source = self.source
+        source.refresh()
+        events = source.events
         count = len(events)
         earliest = min(e.timestamp for e in events)
         most_recent = max(e.timestamp for e in events)
