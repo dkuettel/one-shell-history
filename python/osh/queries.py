@@ -1,4 +1,5 @@
 import json
+import math
 import re
 import time
 from collections import Counter
@@ -6,12 +7,15 @@ from pathlib import Path
 from typing import Optional
 
 from osh.history import AggregatedEvent, SearchConfig
-from osh.osh_files import OshFileChangedMuch
+from osh.sources import HistorySource
 
 
 class EventFilter:
-    def has_changed(self) -> bool:
-        return False
+    def __init__(self):
+        self.revision = 0
+
+    def refresh(self):
+        pass
 
     def discard(self, event) -> bool:
         return False
@@ -19,25 +23,25 @@ class EventFilter:
 
 class UserEventFilter(EventFilter):
     def __init__(self, path: Path):
+        super().__init__()
         self.path = path
-        self.last_mtime = None
-        self.last_size = None
+        self.signature = None
+        self.last_check = -math.inf
+        self.min_delay = 5
         self.ignored_commands = set()
         self.boring_patterns = set()
 
-    def has_changed(self):
+    def refresh(self):
         try:
-            stat = self.path.stat()
-            if (self.last_mtime, self.last_size) == (stat.st_mtime, stat.st_size):
-                return False
-
-            self.last_mtime = stat.st_mtime
-            self.last_size = stat.st_size
-
-            config = json.loads(self.path.read_text())
+            path = self.path.resolve()
+            stat = path.stat()
+            signature = (path, stat.st_mtime, stat.st_size)
+            if signature == self.signature:
+                return
+            self.signature = signature
+            config = json.loads(path.read_text())
             ignored_commands = set(config.get("ignored-commands", []))
             boring_patterns = {re.compile(p) for p in config.get("boring-patterns", [])}
-
         except FileNotFoundError:
             ignored_commands = set()
             boring_patterns = set()
@@ -46,11 +50,11 @@ class UserEventFilter(EventFilter):
             self.ignored_commands == ignored_commands
             and self.boring_patterns == boring_patterns
         ):
-            return False
+            return
 
+        self.revision += 1
         self.ignored_commands = ignored_commands
         self.boring_patterns = boring_patterns
-        return True
 
     def discard(self, event):
         if event.command in self.ignored_commands:
@@ -62,40 +66,61 @@ class UserEventFilter(EventFilter):
 
 
 class UniqueCommandsQuery:
-    def __init__(self, source, event_filter: EventFilter = EventFilter()):
+    def __init__(
+        self,
+        source: HistorySource,
+        event_filter: EventFilter = EventFilter(),
+    ):
         self.source = source
         self.event_filter = event_filter
         self.aggs = {}
+        self.source_revision = None
+        self.source_length = None
+        self.filter_revision = None
 
-    def as_most_often_first(self, filter_failed_at: Optional[float] = None):
+    def generate_events(self, filter_failed_at: Optional[float] = None):
 
-        needs_reload = self.source.needs_reload()
-        filter_has_changed = self.event_filter.has_changed()
+        self.refresh()
 
-        if needs_reload or filter_has_changed:
-            events = self.source.get_all_events()
-            self.aggs = {}
-        else:
-            try:
-                events = self.source.get_new_events()
-            except OshFileChangedMuch:
-                events = self.source.get_all_events()
-                self.aggs = {}
-
-        for event in events:
-            self.update(event)
-
-        relevants = self.aggs.values()
+        events = self.aggs.values()
 
         if filter_failed_at is not None:
-            relevants = (
+            events = (
                 e
-                for e in relevants
+                for e in events
                 if (e.fail_ratio is None) or (e.fail_ratio < filter_failed_at)
             )
 
-        relevants = sorted(relevants, key=lambda e: -e.occurence_count)
-        return relevants
+        yield from sorted(events, key=lambda e: -e.occurence_count)
+
+    def refresh(self):
+
+        self.source.refresh()
+        self.event_filter.refresh()
+
+        if (
+            (self.source_revision == self.source.revision)
+            and (self.source_length == len(self.source.events))
+            and (self.filter_revision == self.event_filter.revision)
+        ):
+            return
+
+        if (
+            (self.source_revision == self.source.revision)
+            and (self.source_length < len(self.source.events))
+            and (self.filter_revision == self.event_filter.revision)
+        ):
+            events = self.source.events[self.source_length :]
+        else:
+            events = self.source.events
+            self.aggs = {}
+
+        for e in events:
+            self.update(e)
+
+        self.source_revision = self.source.revision
+        self.source_length = len(self.source.events)
+        self.filter_revision = self.event_filter.revision
 
     def update(self, event):
 
@@ -128,32 +153,54 @@ class UniqueCommandsQuery:
             agg.folders.update({event.folder})
 
 
+class BackwardsQuery:
+    def __init__(self, source: HistorySource):
+        self.source = source
+
+    def generate_events(self, session: Optional[str]):
+
+        self.source.refresh()
+
+        # TODO restrict to max 1 month back or something?
+        if session is None:
+            yield from reversed(self.source.events)
+        else:
+            yield from (e for e in reversed(self.source.events) if e.session == session)
+
+
 def test():
-    import time
-    from pathlib import Path
 
-    from osh.sources import IncrementalSource
-
-    source = IncrementalSource(Path("histories"))
+    source = HistorySource(Path("histories"))
     event_filter = UserEventFilter(
         Path("~/.one-shell-history/search.json").expanduser()
     )
-    rels = UniqueCommandsQuery(source, event_filter)
+    query = UniqueCommandsQuery(source, event_filter)
 
     dt = time.time()
-    events = list(reversed(rels.as_most_often_first()))
+    events = list(reversed(list(query.generate_events())))
+    dt = time.time() - dt
     events = events[-10:]
     for e in events:
         print(e.occurence_count, e.command)
-    print(f"took {time.time()-dt}")
+    print(f"took {dt}")
 
     print()
     dt = time.time()
-    events = list(reversed(rels.as_most_often_first()))
+    events = list(reversed(list(query.generate_events())))
+    dt = time.time() - dt
     events = events[-10:]
     for e in events:
         print(e.occurence_count, e.command)
-    print(f"took {time.time()-dt}")
+    print(f"took {dt}")
+
+    print()
+    dt = time.time()
+    events = list(reversed(list(query.generate_events())))
+    dt = time.time() - dt
+    events = events[-10:]
+    for e in events:
+        print(e.occurence_count, e.command)
+    print(f"took {dt}")
 
 
 if __name__ == "__main__":
