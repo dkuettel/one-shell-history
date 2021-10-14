@@ -8,7 +8,7 @@ import click
 
 from osh.fzf import fzf
 from osh.history import Event
-from osh.queries import UniqueCommandsQuery, UserEventFilter
+from osh.queries import BackwardsQuery, UniqueCommandsQuery, UserEventFilter
 from osh.sinks import OshSink
 from osh.sources import HistorySource
 from osh.utils import seconds_to_slang, str_mark_trailing_spaces
@@ -34,10 +34,17 @@ class DirectConfig:
         else:
             return UniqueCommandsQuery(self.source)
 
-    def aggregate_events(self, filter_failed_at, filter_ignored):
+    def search(self, filter_failed_at, filter_ignored):
         yield from self.unique_commands_query(filter_ignored).generate_events(
             filter_failed_at
         )
+
+    @cached_property
+    def backwards_query(self):
+        return BackwardsQuery(self.source)
+
+    def search_backwards(self, session_id):
+        yield from self.backwards_query.generate_events(session_id)
 
     def append_event(self, event: Event):
         sink = OshSink(Path("histories/base.osh"))
@@ -104,7 +111,7 @@ def search(ctx, query, filter_failed, filter_ignored):
 
     global config
 
-    events = config.aggregate_events(
+    events = config.search(
         filter_failed_at=1.0 if filter_failed else None,
         filter_ignored=filter_ignored,
     )
@@ -146,19 +153,20 @@ def search(ctx, query, filter_failed, filter_ignored):
     elif result.key == "ctrl-x":
         # TODO just as a POC loading here, ultimately probably cached or something, and locked
         if result.selection is None:
-            ctx.invoke(search, query=result.query)
+            ctx.invoke(search, query=result.query or "")
         else:
             index = int(result.selection.split(" --- ", maxsplit=1)[0])
             event = events[index]
+            # TODO currently not working
             search_config = SearchConfig()
             search_config.add_ignored_command(event.command)
-            ctx.invoke(search, query=result.query)
+            ctx.invoke(search, query=result.query or "")
 
     elif result.key == "ctrl-r":
         # switch between filter ignore and show all
         ctx.invoke(
             search,
-            query=result.query,
+            query=result.query or "",
             filter_failed=not filter_ignored,
             filter_ignored=not filter_ignored,
         )
@@ -171,6 +179,76 @@ def search(ctx, query, filter_failed, filter_ignored):
     # but we could also just tell osh, and then redo, an outer-loop reload
     # or if osh is globally available, then just much easier pipe? if command has unique identifiers
     # but we might lose functionality
+
+
+@cli.command()
+@click.option("--query", default="")
+@click.option("--session/--global", default=True)
+@click.option("--session-id", default=None)
+@click.pass_context
+def search_backwards(ctx, query, session, session_id):
+
+    global config
+
+    session = session and (session_id is not None)
+
+    events = config.search_backwards(session_id if session else None)
+
+    now = datetime.now(tz=timezone.utc)
+    event_by_index = []
+
+    def generate():
+        for index, event in enumerate(events):
+
+            event_by_index.append(event)
+
+            fzf_ago = seconds_to_slang((now - event.timestamp).total_seconds())
+
+            fzf_info = f"[{fzf_ago} ago] [exit={event.exit_code}]"
+
+            # escape literal \ followed by an n so they are not expanded to a new line by fzf's preview
+            fzf_command = event.command.replace("\\n", "\\\\n")
+            # escape actual new lines so they are expanded to a new line by fzf's preview
+            fzf_command = fzf_command.replace("\n", "\\n")
+            # TODO does that take care of all types of new lines, or other dangerous characters for fzf?
+
+            yield f"{index} --- {fzf_info} --- {index+1:#2d}# {fzf_ago:>4s} ago --- {fzf_command}"
+
+    result = fzf(
+        generate(),
+        query=query,
+        delimiter=" --- ",
+        with_nth="3..",  # what to display (and search)
+        nth="2..",  # what to search in the displayed part
+        height="70%",
+        min_height="10",
+        layout="default",
+        prompt="session> " if session else "global> ",
+        preview_window="down:10:wrap",
+        preview="echo {2}; echo {4..}",
+        tiebreak="index",
+        expect="enter,ctrl-c,ctrl-e",
+    )
+
+    if result.key == "enter":
+        if result.selection is None:
+            print()
+        else:
+            index = int(result.selection.split(" --- ", maxsplit=1)[0])
+            event = event_by_index[index]
+            print(event.command)
+    elif result.key == "ctrl-c":
+        print()
+    elif result.key == "ctrl-e":
+        # switch between per-session and global
+        ctx.invoke(
+            search_backwards,
+            query=result.query or "",
+            session=not session,
+            session_id=session_id,
+        )
+    else:
+        assert False, result.key
 
 
 @cli.command()
