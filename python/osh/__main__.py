@@ -108,6 +108,7 @@ def search(ctx, query, filter_failed, filter_ignored):
         filter_failed_at=1.0 if filter_failed else None,
         filter_ignored=filter_ignored,
     )
+    events = list(events)
 
     formatted = format_aggregated_events(events)
 
@@ -319,13 +320,15 @@ def _profile():
         filter_failed_at=1.0,
         filter_ignored=True,
     )
-    # print(f"first in {time.time()-dt}")
-    # dt = time.time()
-    # events = config.aggregate_events(
-    #     filter_failed_at=1.0,
-    #     filter_ignored=True,
-    # )
-    # print(f"second in {time.time()-dt}")
+    events = list(events)
+    print(f"first in {time.time()-dt}")
+    dt = time.time()
+    events = config.aggregate_events(
+        filter_failed_at=1.0,
+        filter_ignored=True,
+    )
+    events = list(events)
+    print(f"second in {time.time()-dt}")
     # formatted = list(format_aggregated_events(events))
     # print(formatted)
 
