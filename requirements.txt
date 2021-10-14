@@ -54,6 +54,8 @@ pyinstrument==4.0.4
     # via -r requirements.in
 pyprof2calltree==1.4.5
     # via -r requirements.in
+pyyaml==6.0
+    # via -r requirements.in
 regex==2021.8.28
     # via black
 smmap==4.0.0

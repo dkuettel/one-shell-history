@@ -7,6 +7,7 @@ line_profiler ~= 3.3.1
 pprofile ~= 2.1.0
 pyinstrument ~= 4.0.4
 pyprof2calltree ~= 1.4.5
+pyyaml ~= 6.0
 snakeviz ~= 2.1.0
 tabulate ~= 0.8.9
 tuna ~= 0.5.9
