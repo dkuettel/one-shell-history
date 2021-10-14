@@ -21,8 +21,7 @@ from osh.osh_files import (
 from osh.zsh_files import read_zsh_file
 
 
-# TODO will go to another place?
-class History:
+class HistorySource:
     def __init__(self, path: Path):
         self.path = path
         self.archived_osh = ArchivedSources(
@@ -208,7 +207,7 @@ def merge_other_into_main(other, main):
 
 
 if __name__ == "__main__":
-    history = History(Path("histories"))
+    history = HistorySource(Path("histories"))
     history.refresh()
     print(f"{history.revision=}")
     events = history.events
