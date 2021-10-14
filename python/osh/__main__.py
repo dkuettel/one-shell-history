@@ -6,10 +6,11 @@ from pathlib import Path
 
 import click
 
+from osh.event_filters import EventFilter
 from osh.fzf import fzf
 from osh.history import Event
 from osh.osh_files import append_event_to_osh_file
-from osh.queries import BackwardsQuery, UniqueCommandsQuery, UserEventFilter
+from osh.queries import BackwardsQuery, UniqueCommandsQuery
 from osh.sinks import OshSink
 from osh.sources import HistorySource
 from osh.utils import seconds_to_slang, str_mark_trailing_spaces
@@ -30,13 +31,13 @@ class DirectConfig:
     @cache
     def unique_commands_query(self, filter_ignored: bool):
         if filter_ignored:
-            config_path = Path("~/.one-shell-history/search.json").expanduser()
-            return UniqueCommandsQuery(self.source, UserEventFilter(config_path))
+            config_path = Path("event-filters.yaml").expanduser()
+            return UniqueCommandsQuery(self.source, EventFilter(config_path))
         else:
             return UniqueCommandsQuery(self.source)
 
     def search(self, filter_failed_at, filter_ignored):
-        yield from self.unique_commands_query(filter_ignored).generate_events(
+        yield from self.unique_commands_query(filter_ignored).generate_results(
             filter_failed_at
         )
 
@@ -45,7 +46,7 @@ class DirectConfig:
         return BackwardsQuery(self.source)
 
     def search_backwards(self, session_id):
-        yield from self.backwards_query.generate_events(session_id)
+        yield from self.backwards_query.generate_results(session_id)
 
     def append_event(self, event: Event):
         append_event_to_osh_file(Path("histories/base.osh"), event)

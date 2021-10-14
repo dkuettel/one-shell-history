@@ -1,5 +1,6 @@
 import datetime
 import json
+import math
 import re
 from collections import Counter
 from contextlib import contextmanager
@@ -8,7 +9,7 @@ from dataclasses import astuple, dataclass, field
 from pathlib import Path
 from typing import Iterable, List, Optional
 
-from osh.utils import locked_file
+from osh.sources import ActiveSources, ArchivedSources
 
 
 @dataclass(frozen=True)
@@ -51,259 +52,111 @@ class Event:
         return cls(**jd)
 
 
-def make(events: Iterable[Event]) -> List[Event]:
-    """
-    this produces the canonical sorting that should be stable
-    if there is a hash collision it might not be completely stable
-    currently we use this as the authority on serialized representation
-    but in the end working with a set would probably be the most robust thing
-    """
-    return sorted(set(events), key=lambda e: (e.timestamp, hash(e)))
-
-
-def merge(histories: List[List[Event]]) -> List[Event]:
-    return make({event for history in histories for event in history})
-
-
-def read_from_file(file: Path, or_empty: bool = False) -> List[Event]:
-    if or_empty and not file.exists():
-        return []
-    history = json.loads(file.read_text())
-    return [Event.from_json_dict(event) for event in history]
-
-
-def write_to_file(history: List[Event], file: Path):
-    json_dict = [event.to_json_dict() for event in history]
-    json_str = json.dumps(json_dict, indent=2)
-    file.parent.mkdir(parents=True, exist_ok=True)
-    file.write_text(json_str)
-
-
-@dataclass
-class FromFile:
-    file: Path = Path("~/.one-shell-history/events.json").expanduser()
-    events: Optional[List[Event]] = None
-
-    @contextmanager
-    def lock(self):
-        from osh.utils import locked_file
-
-        assert self.events is None
-
-        with locked_file(self.file, wait=10):
-            self.events = read_from_file(self.file, or_empty=True)
-            try:
-                yield
-                write_to_file(self.events, self.file)
-            finally:
-                self.events = None
-
-    def insert_event(self, event: Event):
-        assert self.events is not None
-        self.events = merge([self.events, [event]])
-
-
-@dataclass
-class AggregatedEvent:
-    most_recent_timestamp: datetime.datetime
-    command: str
-    # TODO occurrence, with two r
-    occurence_count: int
-    known_exit_count: int
-    failed_exit_count: int
-    folders: Counter
-    most_recent_folder: Optional[str]
-
-    def to_json_dict(self):
-        return dict(
-            most_recent_timestamp=self.most_recent_timestamp.isoformat(),
-            command=self.command,
-            occurence_count=self.occurence_count,
-            known_exit_count=self.known_exit_count,
-            failed_exit_count=self.failed_exit_count,
-            folders=self.folders,
-            most_recent_folder=self.most_recent_folder,
-        )
-
-    @classmethod
-    def from_json_dict(cls, jd):
-        jd = dict(jd)
-        jd["most_recent_timestamp"] = datetime.datetime.fromisoformat(
-            jd["most_recent_timestamp"]
-        )
-        jd["folders"] = Counter(jd["folders"])
-        return cls(**jd)
-
-    @property
-    def fail_ratio(self) -> Optional[float]:
-        if self.known_exit_count == 0:
-            return None
-        return self.failed_exit_count / self.known_exit_count
-
-
-def aggregate_events(
-    events: Iterable[Event],
-    filter_failed_at: Optional[float] = 1.0,
-    filter_ignored: bool = True,
-) -> Iterable[AggregatedEvent]:
-
-    # TODO efficient enough? can really yield because stats are not ready before the end
-    # also if we reverse, then Iterable is not really useful, unless it's a smarter iterable, some can do it fast?
-    # or the in-memory list could be reverse already
-
-    if filter_ignored:
-        config = SearchConfig()
-        event_is_useful = config.event_is_useful
-    else:
-        event_is_useful = lambda _: True
-
-    aggregated = {}
-
-    for event in reversed(events):
-        if not event_is_useful(event):
-            continue
-
-        if event.command in aggregated:
-            agg = aggregated[event.command]
-            agg.occurence_count += 1
-            if event.exit_code is not None:
-                agg.known_exit_count += 1
-                if event.exit_code != 0:
-                    agg.failed_exit_count += 1
-            agg.folders.update({event.folder})
-        else:
-            aggregated[event.command] = AggregatedEvent(
-                most_recent_timestamp=event.timestamp,
-                command=event.command,
-                occurence_count=1,
-                known_exit_count=0 if event.exit_code is None else 1,
-                failed_exit_count=0 if event.exit_code in {0, None} else 1,
-                folders=Counter({event.folder}),
-                most_recent_folder=event.folder,
-            )
-
-    # ordered as most recent event first
-    ordered = list(aggregated.values())
-
-    if filter_failed_at is not None:
-        ordered = [
-            e
-            for e in ordered
-            if (e.fail_ratio is None) or (e.fail_ratio < filter_failed_at)
-        ]
-
-    # order as most often first
-    ordered = sorted(ordered, key=lambda e: -e.occurence_count)
-    # TODO not sure if that's better, if it is, can do it directly, no need to above first make most-recent-first
-    # alternatively make it configurable thru command line
-
-    return ordered
-
-
-def print_events(events: List[Event]):
-    from tabulate import tabulate
-
-    data = []
-
-    for e in events:
-        data.append([str(e.timestamp), e.command])
-
-    print(tabulate(data, headers=["date", "command"]))
-
-
 class History:
-    pass
+    def __init__(self, path: Path):
+        self.path = path
+        self.archived_osh = ArchivedSources(
+            path / "archive",
+            ["**/*.osh", "**/*.osh_legacy"],
+        )
+        self.archived_other = ArchivedSources(
+            path / "archive",
+            ["**/*.zsh_history"],
+        )
+        self.active = ActiveSources(path)
+        self.revision = 0
+        self.events = []
+        self.signature = (
+            self.archived_osh.revision,
+            self.archived_other.revision,
+            self.active.revision,
+        )
+        self.active_length = 0
+
+    def refresh(self):
+        self.archived_osh.refresh()
+        self.archived_other.refresh()
+
+        signature = (
+            self.archived_osh.revision,
+            self.archived_other.revision,
+            self.active.revision,
+        )
+        active_length = len(self.active.events)
+
+        if signature == self.signature and active_length == self.active_length:
+            return
+
+        if signature == self.signature and active_length != self.active_length:
+            new_events = sorted(
+                self.active.events[self.active_length :],
+                key=lambda e: e.timestamp,
+            )
+            if (len(self.events) == 0) or (
+                self.events[-1].timestamp <= new_events[0].timestamp
+            ):
+                self.events.extend(new_events)
+                self.active_length = active_length
+                return
+
+        self.revision += 1
+        self.signature = signature
+        self.active_length = active_length
+
+        events = merge_other_into_main(
+            self.archived_other.events,
+            self.archived_osh.events + self.active.events,
+        )
+        self.events = sorted(events, key=lambda e: e.timestamp)
 
 
-@dataclass
-class EagerHistory(History):
-    file: Path = Path("~/.one-shell-history/events.json").expanduser()
+def merge_other_into_main(other, main):
+    """
+    we generally assume that the 'main' source has no collisions with itself
+    typically 'main' comes from osh sources, and you dont run multiple osh's on the same machine in parallel
+    in contrast, 'other' typically comes from traditional history implementations, like zsh's own history
+    they might have run in parallel, since you can have both zsh and osh record history at the same time
+    in short, duplicates within 'main' are not dealt with, but duplicates within 'other' and against 'main' are dealt with
+    """
 
-    def _lock(self):
-        return locked_file(self.file, wait=10)
+    if len(other) == 0:
+        return main
 
-    def insert_event(self, event: Event):
-        with self._lock():
-            events = read_from_file(self.file, or_empty=True)
-            events.append(event)
-            events = make(events)
-            write_to_file(events, self.file)
+    # zsh and bash seem to use a posix timestamp floored to seconds
+    # therefore these are the seconds when 'main' was recording
+    # and we dont need to use 'other' to complete our history
+    # (this is a somehwat crude heuristics in order to be efficient)
+    covered_seconds = {math.floor(event.timestamp.timestamp()) for event in main}
 
-    def as_list(self) -> List[Event]:
-        with self._lock():
-            events = read_from_file(self.file, or_empty=True)
-        return events
+    # TODO some easy stats here to see if there is much after coming in, or restrict to last 10 days
+    # but how to warn, or return stats, or handle it with user notification?
+    # print(f"{min(events_seconds)=}")
+    # print(f"{len(merge_events)=}")
+    additional = [
+        event
+        for event in other
+        if math.floor(event.timestamp.timestamp()) not in covered_seconds
+    ]
+    # print(f"{len(merge_events)=}")
+    # merge_events_after = [event for event in merge_events if math.floor(event.timestamp.timestamp())>min(events_seconds)]
+    # print(f"{len(merge_events_after)=}")
 
-    def sync(self):
-        pass
-
-
-@dataclass
-class LazyHistory(History):
-    file: Path = Path("~/.one-shell-history/events.json").expanduser()
-
-    def __post_init__(self):
-        with self._lock():
-            self._events = read_from_file(self.file, or_empty=True)
-
-    def _lock(self):
-        return locked_file(self.file, wait=10)
-
-    def insert_event(self, event: Event):
-        self._events = merge([self._events, [event]])
-
-    def as_list(self) -> List[Event]:
-        return list(self._events)
-
-    def sync(self):
-        print("start lazy sync ...", flush=True)
-        with self._lock():
-            disk = read_from_file(self.file, or_empty=True)
-            disk_count_before = len(disk)
-            self._events = merge([self._events, disk])
-            write_to_file(self._events, self.file)
-            disk_count_after = len(self._events)
-            disk_count_added = disk_count_after - disk_count_before
-        print(f"... lazy sync done, {disk_count_added} events added", flush=True)
+    return main + additional
 
 
-class SearchConfig:
-    _empty_config = {
-        "version": "1",
-        "ignored-commands": [],
-        "boring-patterns": [],
-    }
-
-    def __init__(self):
-        self._path = Path("~/.one-shell-history/search.json").expanduser()
-        self._read()
-
-    def _read(self):
-        if self._path.exists():
-            self._config = dict(self._empty_config)
-            self._config.update(json.loads(self._path.read_text()))
-        else:
-            self._config = dict(self._empty_config)
-        assert self._config["version"] == "1"
-        self._write()
-        self.ignored_commands = set(self._config["ignored-commands"])
-        self.boring_patterns = [re.compile(p) for p in self._config["boring-patterns"]]
-
-    def _write(self):
-        self._path.write_text(json.dumps(self._config, indent=4))
-
-    def event_is_useful(self, event: Event) -> bool:
-        # TODO hacky, should check if config file has changed the first time
-        if event.command in self.ignored_commands:
-            return False
-        for pattern in self.boring_patterns:
-            if pattern.fullmatch(event.command):
-                return False
-        return True
-
-    def add_ignored_command(self, command: str):
-        self._read()
-        self._config["ignored-commands"].append(command)
-        self._write()
+def test():
+    history = History(Path("histories"))
+    history.refresh()
+    print(f"{history.revision=}")
+    events = history.events
+    print(f"{len(events)=}")
+    print(f"{events[-1]=}")
+    history.refresh()
+    print(f"{history.revision=}")
+    events = history.events
+    print(f"{len(events)=}")
+    print(f"{events[-1]=}")
 
 
+if __name__ == "__main__":
+    test()

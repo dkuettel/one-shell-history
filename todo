@@ -1,11 +1,4 @@
 
-I dont like the brittle interface I have right now with changes and incremental sources ...
-is there something with hashes and see what changed?
-at least for the search config we could have the hash to know if it changed, instead of a mtime thing
-or we make it has_changed, and reset_has_changed or so? to be explicit?
-
-probably dont need OshFile anymore now that it detours over filesystem
-
 benchmark:
 - pip install vmprof
 - needed apt python-dev or python3.0-dev ?

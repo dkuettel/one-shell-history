@@ -3,95 +3,80 @@ import math
 import re
 import time
 from collections import Counter
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from osh.event_filters import EventFilter
 from osh.history import AggregatedEvent, SearchConfig
 from osh.sources import HistorySource
 
 
-class EventFilter:
-    def __init__(self):
-        self.revision = 0
+@dataclass
+class UniqueCommand:
+    most_recent_timestamp: datetime.datetime
+    command: str
+    occurrence_count: int
+    known_exit_count: int
+    failed_exit_count: int
+    folders: Counter
+    most_recent_folder: Optional[str]
 
-    def refresh(self):
-        pass
+    def to_json_dict(self):
+        return dict(
+            most_recent_timestamp=self.most_recent_timestamp.isoformat(),
+            command=self.command,
+            occurence_count=self.occurence_count,
+            known_exit_count=self.known_exit_count,
+            failed_exit_count=self.failed_exit_count,
+            folders=self.folders,
+            most_recent_folder=self.most_recent_folder,
+        )
 
-    def discard(self, event) -> bool:
-        return False
+    @classmethod
+    def from_json_dict(cls, jd):
+        jd = dict(jd)
+        jd["most_recent_timestamp"] = datetime.datetime.fromisoformat(
+            jd["most_recent_timestamp"]
+        )
+        jd["folders"] = Counter(jd["folders"])
+        return cls(**jd)
 
-
-class UserEventFilter(EventFilter):
-    def __init__(self, path: Path):
-        super().__init__()
-        self.path = path
-        self.signature = None
-        self.last_check = -math.inf
-        self.min_delay = 5
-        self.ignored_commands = set()
-        self.boring_patterns = set()
-
-    def refresh(self):
-        try:
-            path = self.path.resolve()
-            stat = path.stat()
-            signature = (path, stat.st_mtime, stat.st_size)
-            if signature == self.signature:
-                return
-            self.signature = signature
-            config = json.loads(path.read_text())
-            ignored_commands = set(config.get("ignored-commands", []))
-            boring_patterns = {re.compile(p) for p in config.get("boring-patterns", [])}
-        except FileNotFoundError:
-            ignored_commands = set()
-            boring_patterns = set()
-
-        if (
-            self.ignored_commands == ignored_commands
-            and self.boring_patterns == boring_patterns
-        ):
-            return
-
-        self.revision += 1
-        self.ignored_commands = ignored_commands
-        self.boring_patterns = boring_patterns
-
-    def discard(self, event):
-        if event.command in self.ignored_commands:
-            return True
-        for pattern in self.boring_patterns:
-            if pattern.fullmatch(event.command):
-                return True
-        return False
+    @property
+    def fail_ratio(self) -> Optional[float]:
+        if self.known_exit_count == 0:
+            return None
+        return self.failed_exit_count / self.known_exit_count
 
 
 class UniqueCommandsQuery:
     def __init__(
         self,
         source: HistorySource,
-        event_filter: EventFilter = EventFilter(),
+        event_filter: Optional[EventFilter] = None,
     ):
         self.source = source
         self.event_filter = event_filter
-        self.aggs = {}
+        self.uniques = {}
         self.source_revision = None
         self.source_length = None
         self.filter_revision = None
 
-    def generate_events(self, filter_failed_at: Optional[float] = None):
+    def generate_results(self, filter_failed_at: Optional[float] = None):
 
         self.refresh()
 
-        events = self.aggs.values()
+        uniques = self.uniques.values()
 
         if filter_failed_at is not None:
-            events = (
-                e
-                for e in events
-                if (e.fail_ratio is None) or (e.fail_ratio < filter_failed_at)
+            uniques = (
+                u
+                for u in uniques
+                if (u.fail_ratio is None) or (u.fail_ratio < filter_failed_at)
             )
 
-        yield from sorted(events, key=lambda e: -e.occurence_count)
+        yield from sorted(uniques, key=lambda u: -u.occurence_count)
 
     def refresh(self):
 
@@ -113,7 +98,7 @@ class UniqueCommandsQuery:
             events = self.source.events[self.source_length :]
         else:
             events = self.source.events
-            self.aggs = {}
+            self.uniques = {}
 
         for e in events:
             self.update(e)
@@ -124,13 +109,13 @@ class UniqueCommandsQuery:
 
     def update(self, event):
 
-        if self.event_filter.discard(event):
+        if self.event_filter and self.event_filter.discard(event):
             return
 
-        agg = self.aggs.get(event.command, None)
+        u = self.uniques.get(event.command, None)
 
-        if agg is None:
-            agg = AggregatedEvent(
+        if u is None:
+            u = UniqueCommand(
                 most_recent_timestamp=event.timestamp,
                 command=event.command,
                 occurence_count=1,
@@ -139,25 +124,25 @@ class UniqueCommandsQuery:
                 folders=Counter({event.folder}),
                 most_recent_folder=event.folder,
             )
-            self.aggs[event.command] = agg
+            self.uniques[event.command] = u
 
         else:
-            if event.timestamp > agg.most_recent_timestamp:
-                agg.most_recent_timestamp = event.timestamp
-                agg.most_recent_folder = event.folder
-            agg.occurence_count += 1
+            if event.timestamp > u.most_recent_timestamp:
+                u.most_recent_timestamp = event.timestamp
+                u.most_recent_folder = event.folder
+            u.occurence_count += 1
             if event.exit_code is not None:
-                agg.known_exit_count += 1
+                u.known_exit_count += 1
                 if event.exit_code != 0:
-                    agg.failed_exit_count += 1
-            agg.folders.update({event.folder})
+                    u.failed_exit_count += 1
+            u.folders.update({event.folder})
 
 
 class BackwardsQuery:
     def __init__(self, source: HistorySource):
         self.source = source
 
-    def generate_events(self, session: Optional[str]):
+    def generate_results(self, session: Optional[str]):
 
         self.source.refresh()
 
@@ -176,31 +161,15 @@ def test():
     )
     query = UniqueCommandsQuery(source, event_filter)
 
-    dt = time.time()
-    events = list(reversed(list(query.generate_events())))
-    dt = time.time() - dt
-    events = events[-10:]
-    for e in events:
-        print(e.occurence_count, e.command)
-    print(f"took {dt}")
-
-    print()
-    dt = time.time()
-    events = list(reversed(list(query.generate_events())))
-    dt = time.time() - dt
-    events = events[-10:]
-    for e in events:
-        print(e.occurence_count, e.command)
-    print(f"took {dt}")
-
-    print()
-    dt = time.time()
-    events = list(reversed(list(query.generate_events())))
-    dt = time.time() - dt
-    events = events[-10:]
-    for e in events:
-        print(e.occurence_count, e.command)
-    print(f"took {dt}")
+    for i in range(3):
+        print()
+        dt = time.time()
+        events = list(reversed(list(query.generate_results())))
+        dt = time.time() - dt
+        events = events[-10:]
+        for e in events:
+            print(e.occurence_count, e.command)
+        print(f"took {dt}")
 
 
 if __name__ == "__main__":
