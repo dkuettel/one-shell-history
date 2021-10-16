@@ -1,75 +1,26 @@
 import sys
 import time
 from datetime import datetime, timedelta, timezone
-from functools import cache, cached_property
 from pathlib import Path
 
 import click
 
-from osh.event_filters import EventFilter
+from osh import Osh, OshProxy
 from osh.fzf import fzf
-from osh.history import Event, History
-from osh.osh_files import append_event_to_osh_file
-from osh.queries import BackwardsQuery, UniqueCommandsQuery
+from osh.history import Event
 from osh.utils import seconds_to_slang, str_mark_trailing_spaces
 
-
-class ServerConfig:
-    pass
-
-
-class DirectConfig:
-    def __init__(self):
-        pass
-
-    @cached_property
-    def source(self):
-        return History(Path("histories"))
-
-    @cache
-    def unique_commands_query(self, filter_ignored: bool):
-        if filter_ignored:
-            config_path = Path("event-filters.yaml").expanduser()
-            return UniqueCommandsQuery(self.source, EventFilter(config_path))
-        else:
-            return UniqueCommandsQuery(self.source)
-
-    def search(self, filter_failed_at, filter_ignored):
-        yield from self.unique_commands_query(filter_ignored).generate_results(
-            filter_failed_at
-        )
-
-    @cached_property
-    def backwards_query(self):
-        return BackwardsQuery(self.source)
-
-    def search_backwards(self, session_id):
-        yield from self.backwards_query.generate_results(session_id)
-
-    def append_event(self, event: Event):
-        append_event_to_osh_file(Path("histories/base.osh"), event)
-
-    def get_statistics(self):
-        source = self.source
-        source.refresh()
-        events = source.events
-        count = len(events)
-        earliest = min(e.timestamp for e in events)
-        most_recent = max(e.timestamp for e in events)
-        return count, earliest, most_recent
-
-
-config = None
+history = None
 
 
 @click.group()
 @click.option("--server/--no-server", default=False)
 def cli(server):
-    global config
+    global history
     if server:
-        config = ServerConfig()
+        history = OshProxy()
     else:
-        config = DirectConfig()
+        history = Osh()
 
 
 def format_aggregated_events(events):
@@ -108,9 +59,9 @@ def format_aggregated_events(events):
 @click.pass_context
 def search(ctx, query, filter_failed, filter_ignored):
 
-    global config
+    global history
 
-    events = config.search(
+    events = history.search(
         filter_failed_at=1.0 if filter_failed else None,
         filter_ignored=filter_ignored,
     )
@@ -187,11 +138,11 @@ def search(ctx, query, filter_failed, filter_ignored):
 @click.pass_context
 def search_backwards(ctx, query, session, session_id):
 
-    global config
+    global history
 
     session = session and (session_id is not None)
 
-    events = config.search_backwards(session_id if session else None)
+    events = history.search_backwards(session_id if session else None)
 
     now = datetime.now(tz=timezone.utc)
     event_by_index = []
@@ -268,7 +219,7 @@ def append_event(
     session,
 ):
 
-    global config
+    global history
 
     starttime = datetime.fromtimestamp(starttime, tz=timezone.utc)
     endtime = datetime.fromtimestamp(endtime, tz=timezone.utc)
@@ -283,12 +234,13 @@ def append_event(
         session=session,
     )
 
-    config.append_event(event)
+    history.append_event(event)
 
 
 @cli.command()
 def stats():
-    count, earliest, most_recent = config.get_statistics()
+    global history
+    count, earliest, most_recent = history.get_statistics()
     days = round((most_recent - earliest).total_seconds() / (60 * 60 * 24))
     per_day = round(count / days)
     print("Your history contains")
@@ -307,9 +259,9 @@ def profile_lines():
     # kernprof -l python/osh/__main__.py profile , when used with @profile, builtins magic
     # python -m line_profiler -u 1 __main__.py.lprof
 
-    global config
+    global history
 
-    profiler = Profile(config.aggregate_events)
+    profiler = Profile(history.aggregate_events)
 
     with profiler:
         _profile()
@@ -391,16 +343,16 @@ def profile():
 
 def _profile():
 
-    global config
+    global history
     dt = time.time()
-    events = config.aggregate_events(
+    events = history.aggregate_events(
         filter_failed_at=1.0,
         filter_ignored=True,
     )
     events = list(events)
     print(f"first in {time.time()-dt}")
     dt = time.time()
-    events = config.aggregate_events(
+    events = history.aggregate_events(
         filter_failed_at=1.0,
         filter_ignored=True,
     )
