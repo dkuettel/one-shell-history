@@ -8,11 +8,9 @@ import click
 
 from osh.event_filters import EventFilter
 from osh.fzf import fzf
-from osh.history import Event
+from osh.history import Event, History
 from osh.osh_files import append_event_to_osh_file
 from osh.queries import BackwardsQuery, UniqueCommandsQuery
-from osh.sinks import OshSink
-from osh.sources import HistorySource
 from osh.utils import seconds_to_slang, str_mark_trailing_spaces
 
 
@@ -26,7 +24,7 @@ class DirectConfig:
 
     @cached_property
     def source(self):
-        return HistorySource(Path("histories"))
+        return History(Path("histories"))
 
     @cache
     def unique_commands_query(self, filter_ignored: bool):
@@ -86,7 +84,7 @@ def format_aggregated_events(events):
             fzf_failed = "no fail statistics"
         else:
             fzf_failed = f"{event.fail_ratio:.0%} failed"
-        fzf_info = f"[{fzf_ago} ago] [{event.occurence_count} calls, {fzf_failed}]"
+        fzf_info = f"[{fzf_ago} ago] [{event.occurrence_count} calls, {fzf_failed}]"
 
         fzf_folders1 = f"[most recent folder: {event.most_recent_folder}]"
         fzf_folders2 = (
