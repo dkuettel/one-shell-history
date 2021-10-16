@@ -1,16 +1,15 @@
+import datetime
 import json
 import math
 import re
 import time
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 from osh.event_filters import EventFilter
-from osh.history import AggregatedEvent, SearchConfig
-from osh.sources import HistorySource
+from osh.history import History
 
 
 @dataclass
@@ -53,7 +52,7 @@ class UniqueCommand:
 class UniqueCommandsQuery:
     def __init__(
         self,
-        source: HistorySource,
+        source: History,
         event_filter: Optional[EventFilter] = None,
     ):
         self.source = source
@@ -76,7 +75,7 @@ class UniqueCommandsQuery:
                 if (u.fail_ratio is None) or (u.fail_ratio < filter_failed_at)
             )
 
-        yield from sorted(uniques, key=lambda u: -u.occurence_count)
+        yield from sorted(uniques, key=lambda u: -u.occurrence_count)
 
     def refresh(self):
 
@@ -118,7 +117,7 @@ class UniqueCommandsQuery:
             u = UniqueCommand(
                 most_recent_timestamp=event.timestamp,
                 command=event.command,
-                occurence_count=1,
+                occurrence_count=1,
                 known_exit_count=0 if event.exit_code is None else 1,
                 failed_exit_count=0 if event.exit_code in {0, None} else 1,
                 folders=Counter({event.folder}),
@@ -130,7 +129,7 @@ class UniqueCommandsQuery:
             if event.timestamp > u.most_recent_timestamp:
                 u.most_recent_timestamp = event.timestamp
                 u.most_recent_folder = event.folder
-            u.occurence_count += 1
+            u.occurrence_count += 1
             if event.exit_code is not None:
                 u.known_exit_count += 1
                 if event.exit_code != 0:
@@ -139,7 +138,7 @@ class UniqueCommandsQuery:
 
 
 class BackwardsQuery:
-    def __init__(self, source: HistorySource):
+    def __init__(self, source: History):
         self.source = source
 
     def generate_results(self, session: Optional[str]):
@@ -155,10 +154,8 @@ class BackwardsQuery:
 
 def test():
 
-    source = HistorySource(Path("histories"))
-    event_filter = UserEventFilter(
-        Path("~/.one-shell-history/search.json").expanduser()
-    )
+    source = History(Path("histories"))
+    event_filter = EventFilter(Path("~/.one-shell-history/search.json").expanduser())
     query = UniqueCommandsQuery(source, event_filter)
 
     for i in range(3):
