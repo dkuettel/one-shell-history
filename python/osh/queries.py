@@ -26,7 +26,7 @@ class UniqueCommand:
         return dict(
             most_recent_timestamp=self.most_recent_timestamp.isoformat(),
             command=self.command,
-            occurence_count=self.occurence_count,
+            occurrence_count=self.occurrence_count,
             known_exit_count=self.known_exit_count,
             failed_exit_count=self.failed_exit_count,
             folders=self.folders,
@@ -165,7 +165,7 @@ def test():
         dt = time.time() - dt
         events = events[-10:]
         for e in events:
-            print(e.occurence_count, e.command)
+            print(e.occurrence_count, e.command)
         print(f"took {dt}")
 
 
