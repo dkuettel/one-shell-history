@@ -1,3 +1,4 @@
+import math
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -245,13 +246,26 @@ def append_event(
 def stats():
     global history
     s = history.get_statistics()
-    days = round((s.latest - s.earliest).total_seconds() / (60 * 60 * 24))
-    per_day = round(s.count / days)
-    print("Your history contains")
-    print(f"  {s.count:,} events")
-    print(f"  over {days:,} days")
-    print(f"  between {s.earliest.date()} and {s.most_recent.date()}.")
-    print(f"That's an incredible {per_day} commands per day, Commander.")
+    print()
+    print("Hello Commander, your situation report:")
+    if s.count == 0:
+        print("  No data as of yet.")
+    else:
+        days = max(
+            1,
+            math.ceil((s.latest - s.earliest).total_seconds() / (60 * 60 * 24)),
+        )
+        per_day = round(s.count / days)
+        print(f"  - {s.count:,} events")
+        print(f"  - over {days:,} days")
+        print(f"  - between {s.earliest.date()} and {s.latest.date()}")
+        print()
+        print(f"Sir, that's an incredible {per_day} commands per day,")
+        print(
+            f"at a confirmed success rate of {round(100*s.success_rate)} over one hundred!"
+        )
+    print()
+    print(f"        -- Good day, Commander.")
 
 
 @cli.command()

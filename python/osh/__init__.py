@@ -4,6 +4,7 @@ import datetime
 from dataclasses import asdict, dataclass
 from functools import cache, cached_property
 from pathlib import Path
+from typing import Optional
 
 from osh import defaults, rpc
 from osh.event_filters import EventFilter
@@ -72,7 +73,7 @@ class OshProxy:
 
     @rpc.remote
     def get_statistics(self, stream) -> Statistics:
-        return Statistics(*stream.read())
+        return Statistics.from_json_dict(stream.read())
 
     @rpc.remote
     def exit(self, stream):
@@ -107,7 +108,7 @@ class OshServer:
 
     @rpc.exposed
     def get_statistics(self, stream):
-        stream.write(self.history.get_statistics())
+        stream.write(self.history.get_statistics().to_json_dict())
 
     @rpc.exposed
     def exit(self, stream):
@@ -116,15 +117,36 @@ class OshServer:
 
 @dataclass
 class Statistics:
-    count: int
-    earliest: datetime.datetime
-    latest: datetime.datetime
+    count: int = 0
+    earliest: Optional[datetime.datetime] = None
+    latest: Optional[datetime.datetime] = None
+    success_rate: Optional[float] = None
 
     @classmethod
     def from_source(cls, source: History):
         source.refresh()
+        count = len(source.events)
+        if count == 0:
+            return cls()
         return cls(
-            count=len(source.events),
-            earliest=min(e.timestampt for e in source.events),
-            latest=max(e.timestampt for e in source.events),
+            count=count,
+            earliest=min(e.timestamp for e in source.events),
+            latest=max(e.timestamp for e in source.events),
+            success_rate=sum(e.exit_code in {0, None} for e in source.events) / count,
         )
+
+    def to_json_dict(self):
+        jd = asdict(self)
+        if jd["earliest"] is not None:
+            jd["earliest"] = jd["earliest"].isoformat()
+        if jd["latest"] is not None:
+            jd["latest"] = jd["latest"].isoformat()
+        return jd
+
+    @classmethod
+    def from_json_dict(cls, jd):
+        if jd["earliest"] is not None:
+            jd["earliest"] = datetime.datetime.fromisoformat(jd["earliest"])
+        if jd["latest"] is not None:
+            jd["latest"] = datetime.datetime.fromisoformat(jd["latest"])
+        return cls(**jd)
