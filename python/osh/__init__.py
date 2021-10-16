@@ -5,11 +5,11 @@ from dataclasses import asdict, dataclass
 from functools import cache, cached_property
 from pathlib import Path
 
-from osh import defaults
+from osh import defaults, rpc
 from osh.event_filters import EventFilter
 from osh.history import Event, History
 from osh.osh_files import append_event_to_osh_file
-from osh.queries import BackwardsQuery, UniqueCommandsQuery
+from osh.queries import BackwardsQuery, UniqueCommand, UniqueCommandsQuery
 
 
 class Osh:
@@ -51,13 +51,67 @@ class Osh:
 
 
 class OshProxy:
-    pass
+    def __init__(self, socket_path: Path = defaults.dot / defaults.socket):
+        self.socket_path = socket_path
 
+    @rpc.remote
+    def search(self, stream, filter_failed_at, filter_ignored):
+        stream.write((filter_failed_at, filter_ignored))
+        while (command := stream.read()) is not None:
+            yield UniqueCommand.from_json_dict(command)
 
-class OshService:
-    def __init__(self):
+    @rpc.remote
+    def search_backwards(self, stream, session_id):
+        stream.write(session_id)
+        while (event := stream.read()) is not None:
+            yield Event.from_json_dict(event)
+
+    @rpc.remote
+    def append_event(self, stream, event: Event):
+        stream.write(event.to_json_dict())
+
+    @rpc.remote
+    def get_statistics(self, stream) -> Statistics:
+        return Statistics(*stream.read())
+
+    @rpc.remote
+    def exit(self, stream):
         pass
-        # self.osh = Osh()
+
+
+class OshServer:
+    def __init__(self, history: Osh):
+        self.history = history
+
+    @rpc.exposed
+    def search(self, stream):
+        filter_failed_at, filter_ignored = stream.read()
+        commands = self.history.search(filter_failed_at, filter_ignored)
+        for command in commands:
+            stream.write(command.to_json_dict())
+        # TODO this is to go into a generator, how do we detect when the generator stops reading? socket closed?
+        stream.write(None)
+
+    @rpc.exposed
+    def search_backwards(self, stream):
+        session_id = stream.read()
+        events = self.history.search_backwards(session_id)
+        for event in events:
+            stream.write(event.to_json_dict())
+        # TODO this is to go into a generator, how do we detect when the generator stops reading? socket closed?
+        stream.write(None)
+
+    @rpc.exposed
+    def append_event(self, stream):
+        self.history.append_event(Event.from_json_dict(stream.read()))
+
+    @rpc.exposed
+    def get_statistics(self, stream):
+        stream.write(self.history.get_statistics())
+
+    @rpc.exposed
+    def exit(self, stream):
+        raise rpc.Exit()
 
 
 @dataclass

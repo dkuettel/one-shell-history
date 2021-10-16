@@ -5,7 +5,7 @@ from pathlib import Path
 
 import click
 
-from osh import Osh, OshProxy
+from osh import Osh, OshProxy, OshServer, defaults, rpc
 from osh.fzf import fzf
 from osh.history import Event
 from osh.utils import seconds_to_slang, str_mark_trailing_spaces
@@ -61,13 +61,17 @@ def search(ctx, query, filter_failed, filter_ignored):
 
     global history
 
-    events = history.search(
-        filter_failed_at=1.0 if filter_failed else None,
-        filter_ignored=filter_ignored,
-    )
-    events = list(events)
+    events = []
 
-    formatted = format_aggregated_events(events)
+    def gen_events():
+        for event in history.search(
+            filter_failed_at=1.0 if filter_failed else None,
+            filter_ignored=filter_ignored,
+        ):
+            events.append(event)
+            yield event
+
+    formatted = format_aggregated_events(gen_events())
 
     result = fzf(
         formatted,
@@ -248,6 +252,18 @@ def stats():
     print(f"  over {days:,} days")
     print(f"  between {s.earliest.date()} and {s.most_recent.date()}.")
     print(f"That's an incredible {per_day} commands per day, Commander.")
+
+
+@cli.command()
+def run_server():
+    history = Osh()
+    server = OshServer(history)
+    rpc.run_server(defaults.dot / defaults.socket, server)
+
+
+@cli.command()
+def stop_server():
+    OshProxy().exit()
 
 
 @cli.command()
