@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from osh.event_filters import EventFilter
+from osh.event_filters import EventFilter, NoEventFilter
 from osh.history import History
 
 
@@ -53,7 +53,7 @@ class UniqueCommandsQuery:
     def __init__(
         self,
         source: History,
-        event_filter: Optional[EventFilter] = None,
+        event_filter: EventFilter = NoEventFilter(),
     ):
         self.source = source
         self.event_filter = event_filter
@@ -108,7 +108,7 @@ class UniqueCommandsQuery:
 
     def update(self, event):
 
-        if self.event_filter and self.event_filter.discard(event):
+        if self.event_filter.discard(event):
             return
 
         u = self.uniques.get(event.command, None)

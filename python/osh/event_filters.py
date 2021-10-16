@@ -5,7 +5,16 @@ from pathlib import Path
 
 import yaml
 
-from osh.history import Event
+
+class NoEventFilter:
+    def __init__(self):
+        self.revision = 0
+
+    def refresh(self):
+        pass
+
+    def discard(self, event):
+        return False
 
 
 class EventFilter:
@@ -51,7 +60,7 @@ class EventFilter:
         self.ignored_commands = ignored_commands
         self.boring_patterns = boring_patterns
 
-    def discard(self, event: Event) -> bool:
+    def discard(self, event) -> bool:
         if event.command in self.ignored_commands:
             return True
         for pattern in self.boring_patterns:
