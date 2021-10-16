@@ -24,7 +24,7 @@ class JsonSocket:
 
     def read(self):
         # TODO maybe we need a timeout here if the client dies mid-request? or does the connection die anyway then?
-        # TODO indeed it doest seem to be robust when the other side closes the connection unexpectedly, or catch higher up?
+        # TODO indeed it doesnt seem to be robust when the other side closes the connection unexpectedly, or catch higher up?
         return json.loads(self.stream.readline())
 
     def write(self, data):
