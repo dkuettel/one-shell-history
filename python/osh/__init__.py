@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import datetime
+from dataclasses import asdict, dataclass
 from functools import cache, cached_property
 from pathlib import Path
 
@@ -42,14 +46,8 @@ class Osh:
     def append_event(self, event: Event):
         append_event_to_osh_file(self.dot / defaults.local, event)
 
-    def get_statistics(self):
-        source = self.source
-        source.refresh()
-        events = source.events
-        count = len(events)
-        earliest = min(e.timestamp for e in events)
-        most_recent = max(e.timestamp for e in events)
-        return count, earliest, most_recent
+    def get_statistics(self) -> Statistics:
+        return Statistics.from_source(self.source)
 
 
 class OshProxy:
@@ -60,3 +58,19 @@ class OshService:
     def __init__(self):
         pass
         # self.osh = Osh()
+
+
+@dataclass
+class Statistics:
+    count: int
+    earliest: datetime.datetime
+    latest: datetime.datetime
+
+    @classmethod
+    def from_source(cls, source: History):
+        source.refresh()
+        return cls(
+            count=len(source.events),
+            earliest=min(e.timestampt for e in source.events),
+            latest=max(e.timestampt for e in source.events),
+        )

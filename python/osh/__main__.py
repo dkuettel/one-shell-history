@@ -240,13 +240,13 @@ def append_event(
 @cli.command()
 def stats():
     global history
-    count, earliest, most_recent = history.get_statistics()
-    days = round((most_recent - earliest).total_seconds() / (60 * 60 * 24))
-    per_day = round(count / days)
+    s = history.get_statistics()
+    days = round((s.latest - s.earliest).total_seconds() / (60 * 60 * 24))
+    per_day = round(s.count / days)
     print("Your history contains")
-    print(f"  {count:,} events")
+    print(f"  {s.count:,} events")
     print(f"  over {days:,} days")
-    print(f"  between {earliest.date()} and {most_recent.date()}.")
+    print(f"  between {s.earliest.date()} and {s.most_recent.date()}.")
     print(f"That's an incredible {per_day} commands per day, Commander.")
 
 
