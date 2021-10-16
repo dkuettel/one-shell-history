@@ -8,7 +8,7 @@ import yaml
 from osh.history import Event
 
 
-class EventFilter(EventFilter):
+class EventFilter:
     def __init__(self, path: Path):
         self.revision = 0
         self.path = path
@@ -26,11 +26,12 @@ class EventFilter(EventFilter):
             if signature == self.signature:
                 return
 
-            data = yaml.load(path.read_text())
+            data = yaml.load(path.read_text(), yaml.Loader)
             self.signature = signature
 
             # TODO react nicely to broken data
             assert data["format"] == "osh-event-filters-v1", data["format"]
+            data.pop("format")
             ignored_commands = set(data.pop("ignore-commands", []))
             boring_patterns = {re.compile(p) for p in data.pop("ignore-patterns", [])}
             assert len(data) == 0, data
