@@ -9,8 +9,6 @@ from dataclasses import astuple, dataclass, field
 from pathlib import Path
 from typing import Iterable, List, Optional
 
-from osh.sources import ActiveSources, ArchivedSources
-
 
 @dataclass(frozen=True)
 class Event:
@@ -54,6 +52,10 @@ class Event:
 
 class History:
     def __init__(self, path: Path):
+
+        # TODO not so nice
+        from osh.sources import ActiveSources, ArchivedSources
+
         self.path = path
         self.archived_osh = ArchivedSources(
             path / "archive",
