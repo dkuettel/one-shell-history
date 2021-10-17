@@ -105,6 +105,8 @@ class OshFileReader:
 
     def _generate(self):
 
+        # NOTE in incremental read that might not be the right state
+        # (when self.last_tell jumps somewhere)
         file_format = "osh-history-v1"
 
         with self.last_file.open("rt") as file:
@@ -114,10 +116,17 @@ class OshFileReader:
                 if self.last_line != file.readline():
                     raise OshFileChangedMuch(self.file)
 
-            while (line := file.readline()).endswith("\n"):
+            def full_lines():
+                while True:
+                    tell = file.tell()
+                    line = file.readline()
+                    if not line.endswith("\n"):
+                        return False
+                    self.last_tell = tell
+                    self.last_line = line
+                    yield line
 
-                self.last_tell = file.tell()
-                self.last_line = line
+            for line in full_lines():
 
                 line = json.loads(line)
 

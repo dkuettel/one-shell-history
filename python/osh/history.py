@@ -78,6 +78,7 @@ class History:
     def refresh(self):
         self.archived_osh.refresh()
         self.archived_other.refresh()
+        self.active.refresh()
 
         signature = (
             self.archived_osh.revision,

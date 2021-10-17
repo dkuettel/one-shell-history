@@ -82,7 +82,7 @@ class ActiveSources:
         if signature == self.signature:
             try:
                 for r in self.readers:
-                    self.events.extend(r.get_new_events())
+                    self.events.extend(r.read_events())
             except OshFileChangedMuch:
                 pass
             else:
@@ -96,9 +96,9 @@ class ActiveSources:
         for f in signature:
             try:
                 r = OshFileReader(f)
-                self.events.extend(r.get_new_events())
+                self.events.extend(r.read_events())
                 self.signature.add(f)
-                self.readers.add(r)
+                self.readers.append(r)
             except FileNotFoundError:
                 pass
 
