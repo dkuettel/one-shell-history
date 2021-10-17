@@ -10,7 +10,13 @@ from osh import defaults, rpc
 from osh.event_filters import EventFilter
 from osh.history import Event, History
 from osh.osh_files import append_event_to_osh_file
-from osh.queries import BackwardsQuery, UniqueCommand, UniqueCommandsQuery
+from osh.queries import (
+    BackwardsQuery,
+    UniqueCommand,
+    UniqueCommandsQuery,
+    query_next_event,
+    query_previous_event,
+)
 
 
 class Osh:
@@ -51,6 +57,30 @@ class Osh:
             no_older_than=session_start,
         )
 
+    def previous_event(
+        self,
+        timestamp: datetime.datetime,
+        prefix: Optional[str],
+        session_id: Optional[str] = None,
+        session_start: Optional[datetime.datetime] = None,
+    ):
+        self.source.refresh()
+        return query_previous_event(
+            self.source.events, timestamp, prefix, session_id, session_start
+        )
+
+    def next_event(
+        self,
+        timestamp: datetime.datetime,
+        prefix: Optional[str],
+        session_id: Optional[str] = None,
+        session_start: Optional[datetime.datetime] = None,
+    ):
+        self.source.refresh()
+        return query_next_event(
+            self.source.events, timestamp, prefix, session_id, session_start
+        )
+
     def append_event(self, event: Event):
         append_event_to_osh_file(self.dot / defaults.local, event)
 
@@ -75,6 +105,46 @@ class OshProxy:
         stream.write((session_id, session_start))
         while (event := stream.read()) is not None:
             yield Event.from_json_dict(event)
+
+    @rpc.remote
+    def previous_event(
+        self,
+        stream,
+        timestamp: datetime.datetime,
+        prefix: Optional[str],
+        session_id: Optional[str] = None,
+        session_start: Optional[datetime.datetime] = None,
+    ):
+        timestamp = timestamp.isoformat()
+        if session_start is not None:
+            session_start = session_start.isoformat()
+
+        stream.write((timestamp, prefix, session_id, session_start))
+        event = stream.read()
+
+        if event is None:
+            return None
+        return Event.from_json_dict(event)
+
+    @rpc.remote
+    def next_event(
+        self,
+        stream,
+        timestamp: datetime.datetime,
+        prefix: Optional[str],
+        session_id: Optional[str] = None,
+        session_start: Optional[datetime.datetime] = None,
+    ):
+        timestamp = timestamp.isoformat()
+        if session_start is not None:
+            session_start = session_start.isoformat()
+
+        stream.write((timestamp, prefix, session_id, session_start))
+        event = stream.read()
+
+        if event is None:
+            return None
+        return Event.from_json_dict(event)
 
     @rpc.remote
     def append_event(self, stream, event: Event):
@@ -112,6 +182,30 @@ class OshServer:
             stream.write(event.to_json_dict())
         # TODO this is to go into a generator, how do we detect when the generator stops reading? socket closed?
         stream.write(None)
+
+    @rpc.exposed
+    def previous_event(self, stream):
+        timestamp, prefix, session_id, session_start = stream.read()
+        timestamp = datetime.datetime.fromisoformat(timestamp)
+        if session_start is not None:
+            session_start = datetime.datetime.fromisoformat(session_start)
+        event = self.history.previous_event(
+            timestamp, prefix, session_id, session_start
+        )
+        if event is None:
+            stream.write(None)
+        stream.write(event.to_json_dict())
+
+    @rpc.exposed
+    def next_event(self, stream):
+        timestamp, prefix, session_id, session_start = stream.read()
+        timestamp = datetime.datetime.fromisoformat(timestamp)
+        if session_start is not None:
+            session_start = datetime.datetime.fromisoformat(session_start)
+        event = self.history.next_event(timestamp, prefix, session_id, session_start)
+        if event is None:
+            stream.write(None)
+        stream.write(event.to_json_dict())
 
     @rpc.exposed
     def append_event(self, stream):
