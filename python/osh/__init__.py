@@ -41,8 +41,15 @@ class Osh:
     def backwards_query(self):
         return BackwardsQuery(self.source)
 
-    def search_backwards(self, session_id):
-        yield from self.backwards_query.generate_results(session_id)
+    def search_backwards(
+        self,
+        session_id: Optional[str] = None,
+        session_start: Optional[datetime.datetime] = None,
+    ):
+        yield from self.backwards_query.generate_results(
+            session=session_id,
+            no_older_than=session_start,
+        )
 
     def append_event(self, event: Event):
         append_event_to_osh_file(self.dot / defaults.local, event)
@@ -62,8 +69,10 @@ class OshProxy:
             yield UniqueCommand.from_json_dict(command)
 
     @rpc.remote
-    def search_backwards(self, stream, session_id):
-        stream.write(session_id)
+    def search_backwards(self, stream, session_id=None, session_start=None):
+        if session_start is not None:
+            session_start = session_start.isoformat()
+        stream.write((session_id, session_start))
         while (event := stream.read()) is not None:
             yield Event.from_json_dict(event)
 
@@ -95,8 +104,10 @@ class OshServer:
 
     @rpc.exposed
     def search_backwards(self, stream):
-        session_id = stream.read()
-        events = self.history.search_backwards(session_id)
+        session_id, session_start = stream.read()
+        if session_start is not None:
+            session_start = datetime.datetime.fromisoformat(session_start)
+        events = self.history.search_backwards(session_id, session_start)
         for event in events:
             stream.write(event.to_json_dict())
         # TODO this is to go into a generator, how do we detect when the generator stops reading? socket closed?

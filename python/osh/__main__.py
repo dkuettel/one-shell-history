@@ -140,14 +140,22 @@ def search(ctx, query, filter_failed, filter_ignored):
 @click.option("--query", default="")
 @click.option("--session/--global", default=True)
 @click.option("--session-id", default=None)
+@click.option("--session-start", type=float, default=None)
 @click.pass_context
-def search_backwards(ctx, query, session, session_id):
+def search_backwards(ctx, query, session, session_id, session_start):
 
     global history
 
     session = session and (session_id is not None)
 
-    events = history.search_backwards(session_id if session else None)
+    if session_start is not None:
+        session_start = datetime.fromtimestamp(session_start, tz=timezone.utc)
+
+    events = history.search_backwards(
+        session_id=session_id if session else None,
+        # session_start=session_start if session else None,
+        session_start=session_start,
+    )
 
     now = datetime.now(tz=timezone.utc)
     event_by_index = []

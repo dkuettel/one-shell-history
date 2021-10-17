@@ -141,15 +141,19 @@ class BackwardsQuery:
     def __init__(self, source: History):
         self.source = source
 
-    def generate_results(self, session: Optional[str]):
-
+    def generate_results(
+        self,
+        session: Optional[str] = None,
+        no_older_than: Optional[datetime.datetime] = None,
+    ):
         self.source.refresh()
 
-        # TODO restrict to max 1 month back or something?
-        if session is None:
-            yield from reversed(self.source.events)
-        else:
-            yield from (e for e in reversed(self.source.events) if e.session == session)
+        for e in reversed(self.source.events):
+            if no_older_than is not None and e.timestamp < no_older_than:
+                break
+            if session is not None and e.session != session:
+                continue
+            yield e
 
 
 def test():
