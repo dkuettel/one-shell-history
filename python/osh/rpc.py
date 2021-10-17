@@ -1,6 +1,7 @@
 import inspect
 import io
 import json
+import os
 import socket as sockets
 from pathlib import Path
 from typing import Callable
@@ -44,7 +45,7 @@ def exposed(method):
     return method
 
 
-def run_server(socket_path: Path, server):
+def run_server(socket_path: Path, server, notify_systemd: bool = True):
 
     targets: dict[str, Callable] = {}
     for name in dir(server):
@@ -89,6 +90,11 @@ def run_server(socket_path: Path, server):
                 socket.bind(str(socket_path))
 
             socket.listen(10)
+
+            # TODO not sure what is the best place to have a reasonable guarantee
+            if notify_systemd:
+                if os.system("systemd-notify --ready") != 0:
+                    print("warning: systemd-notify failed")
 
             while True:
                 stream = Stream.from_socket(socket.accept()[0])
