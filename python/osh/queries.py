@@ -1,4 +1,5 @@
 import datetime
+import itertools
 import json
 import math
 import re
@@ -9,7 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from osh.event_filters import EventFilter, NoEventFilter
-from osh.history import History
+from osh.history import Event, History
 
 
 @dataclass
@@ -154,6 +155,47 @@ class BackwardsQuery:
             if session is not None and e.session != session:
                 continue
             yield e
+
+
+def query_previous_event(
+    events: list[Event],
+    timestamp: datetime.datetime,
+    prefix: Optional[str],
+    session_id: Optional[str] = None,
+    session_start: Optional[datetime.datetime] = None,
+):
+    events = reversed(events)
+    events = itertools.dropwhile(lambda e: e.timestamp >= timestamp, events)
+    if session_start is not None:
+        events = itertools.takewhile(lambda e: e.timestamp >= session_start, events)
+    if prefix is not None:
+        events = (e for e in events if e.command.startswith(prefix))
+    if session_id is not None:
+        events = (e for e in events if e.session == session_id)
+
+    return next(events, None)
+
+
+def query_next_event(
+    events: list[Event],
+    timestamp: datetime.datetime,
+    prefix: Optional[str],
+    session_id: Optional[str] = None,
+    session_start: Optional[datetime.datetime] = None,
+):
+    events = reversed(events)
+    if session_start is None or timestamp > session_start:
+        events = itertools.takewhile(lambda e: e.timestamp > timestamp, events)
+    else:
+        events = itertools.takewhile(lambda e: e.timestamp >= session_start, events)
+    if prefix is not None:
+        events = (e for e in events if e.command.startswith(prefix))
+    if session_id is not None:
+        events = (e for e in events if e.session == session_id)
+    candidate = None
+    for e in events:
+        candidate = e
+    return candidate
 
 
 def test():
