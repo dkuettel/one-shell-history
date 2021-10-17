@@ -4,9 +4,8 @@ Description=one-shell-history service
 [Service]
 Type=notify
 NotifyAccess=all
-User=%i
 ExecStart=$base/ExecStart
 ExecStop=$base/ExecStop
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target

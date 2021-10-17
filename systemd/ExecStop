@@ -3,9 +3,6 @@ set -eux -o pipefail
 
 if [[ -v MAINPID ]]; then
     cd ${0:a:h}/..
-    path=($PWD/.venv/bin $path)
-    export PYTHONPATH=$PWD/python
-    python -m osh.cli service stop
-    # TODO does this wait forever and what is the exit-code? instead read answer from above?
+    bin/osh stop-server
     tail --pid $MAINPID -f /dev/null
 fi
