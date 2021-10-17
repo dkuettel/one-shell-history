@@ -3,6 +3,7 @@ import io
 import json
 import socket as sockets
 from pathlib import Path
+from typing import Callable
 
 
 class RemoteException(Exception):
@@ -45,11 +46,13 @@ def exposed(method):
 
 def run_server(socket_path: Path, server):
 
-    targets = {
-        getattr(getattr(server, name), "__osh_rpc_name__", None): getattr(server, name)
-        for name in dir(server)
-    }
-    targets.pop(None, None)
+    targets: dict[str, Callable] = {}
+    for name in dir(server):
+        member = getattr(server, name)
+        target = getattr(member, "__osh_rpc_name__", None)
+        if target is None:
+            continue
+        targets[target] = member
 
     socket_path.parent.mkdir(parents=True, exist_ok=True)
 
