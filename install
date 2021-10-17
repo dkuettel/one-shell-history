@@ -14,7 +14,10 @@ if ! dpkg --compare-versions $(fzf --version) ge 0.20.0; then
 fi
 
 (
-    virtualenv --python python3.9 $base/.venv
+    cd $base
+    if [[ ! -d .venv ]]; then
+        virtualenv --python python3.9 .venv
+    fi
     path=($base/.venv/bin $path)
     pip install --upgrade pip pip-tools
     pip-sync
