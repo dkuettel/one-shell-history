@@ -215,6 +215,54 @@ def search_backwards(ctx, query, session, session_id, session_start):
 
 
 @cli.command()
+@click.option("--timestamp", type=float)
+@click.option("--prefix", type=str, default=None)
+@click.option("--session-id", type=str, default=None)
+@click.option("--session-start", type=float, default=None)
+def previous_event(timestamp, prefix, session_id, session_start):
+
+    tolerance = 1e-8
+    timestamp = datetime.fromtimestamp(timestamp - tolerance, tz=timezone.utc)
+
+    # TODO note we dont yet pass that info, the zsh glue code needs to record the start of the session for this
+    if session_start is not None:
+        session_start = datetime.fromtimestamp(session_start, tz=timezone.utc)
+
+    global history
+    event = history.previous_event(timestamp, prefix, session_id, session_start)
+
+    if event is None:
+        sys.exit(1)
+
+    print(f"{event.timestamp.timestamp():021.9f} {event.command}")
+    # NOTE: in zsh use x=$(osh previous-event ...) and then $x[1,21] or $x[23,-1] to get both outputs
+
+
+@cli.command()
+@click.option("--timestamp", type=float)
+@click.option("--prefix", type=str, default=None)
+@click.option("--session-id", type=str, default=None)
+@click.option("--session-start", type=float, default=None)
+def next_event(timestamp, prefix, session_id, session_start):
+
+    tolerance = 1e-8
+    timestamp = datetime.fromtimestamp(timestamp + tolerance, tz=timezone.utc)
+
+    # TODO note we dont yet pass that info, the zsh glue code needs to record the start of the session for this
+    if session_start is not None:
+        session_start = datetime.fromtimestamp(session_start, tz=timezone.utc)
+
+    global history
+    event = history.next_event(timestamp, prefix, session_id, session_start)
+
+    if event is None:
+        sys.exit(1)
+
+    print(f"{event.timestamp.timestamp():021.9f} {event.command}")
+    # NOTE: in zsh use x=$(osh previous-event ...) and then $x[1,21] or $x[23,-1] to get both outputs
+
+
+@cli.command()
 @click.option("--starttime", type=float, required=True)
 @click.option("--command", type=str, required=True)
 @click.option("--endtime", type=float, required=True)
