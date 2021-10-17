@@ -19,9 +19,16 @@ class ConnectionClosed(Exception):
     pass
 
 
+class NoServerException(Exception):
+    pass
+
+
 def remote(method):
     def wrapper(self, *args, **kwargs):
-        stream = Stream.from_path(self.socket_path)
+        try:
+            stream = Stream.from_path(self.socket_path)
+        except (FileNotFoundError, ConnectionRefusedError, TimeoutError) as e:
+            raise NoServerException from e
         stream.write(method.__name__)
         result = method(self, stream, *args, **kwargs)
 
