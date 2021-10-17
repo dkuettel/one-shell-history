@@ -9,9 +9,18 @@ import click
 from osh import Osh, OshProxy, OshServer, defaults, rpc
 from osh.fzf import fzf
 from osh.history import Event
+from osh.rpc import NoServerException
 from osh.utils import seconds_to_slang, str_mark_trailing_spaces
 
 history = None
+
+
+def make_osh():
+    return Osh()
+
+
+def make_osh_proxy():
+    return OshProxy()
 
 
 @click.group()
@@ -19,9 +28,9 @@ history = None
 def cli(server):
     global history
     if server:
-        history = OshProxy()
+        history = make_osh_proxy()
     else:
-        history = Osh()
+        history = make_osh()
 
 
 def format_aggregated_events(events):
@@ -295,7 +304,18 @@ def append_event(
         session=session,
     )
 
-    history.append_event(event)
+    try:
+        history.append_event(event)
+    except NoServerException:
+        print(
+            "[0;7mWarning: Could not contact the osh service.[0m",
+            file=sys.stderr,
+        )
+        make_osh().append_event(event)
+        print(
+            "[0;7mThe event was added directly to the history.[0m",
+            file=sys.stderr,
+        )
 
 
 @cli.command()
