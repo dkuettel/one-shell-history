@@ -54,7 +54,8 @@ def run_server(socket_path: Path, server):
             continue
         targets[target] = member
 
-    socket_path.parent.mkdir(parents=True, exist_ok=True)
+    assert "Who is it?" not in targets
+    targets["Who is it?"] = lambda stream: stream.write("osh.rpc")
 
     try:
         with sockets.socket(
@@ -63,8 +64,31 @@ def run_server(socket_path: Path, server):
         ) as socket:
 
             socket.settimeout(None)
-            socket.bind(str(socket_path))
-            socket.listen(1)
+
+            try:
+                socket_path.parent.mkdir(parents=True, exist_ok=True)
+                socket.bind(str(socket_path))
+            except OSError as e:
+                if not socket_path.is_socket():
+                    raise Exception(f"There is a non-socket file at {socket_path}.")
+                try:
+                    stream = Stream.from_path(socket_path)
+                    stream.write("Who is it?")
+                    reply = stream.read()
+                    stream.close()
+                    if reply == "osh.rpc":
+                        raise Exception(
+                            f"There is already an rpc server running on {socket_path}"
+                        )
+                    raise Exception(
+                        f"There is already an unknown server running on {socket_path}"
+                    )
+                except (ConnectionRefusedError, TimeoutError):
+                    pass  # stale socket file
+                socket_path.unlink()
+                socket.bind(str(socket_path))
+
+            socket.listen(10)
 
             while True:
                 stream = Stream.from_socket(socket.accept()[0])
@@ -88,6 +112,7 @@ def run_server(socket_path: Path, server):
 
 class Stream:
     def __init__(self, socket):
+        socket.settimeout(1)
         # TODO should we also close the socket? we dont keep it now
         self.stream = io.TextIOWrapper(socket.makefile(mode="rwb"))
 
@@ -101,6 +126,7 @@ class Stream:
             family=sockets.AF_UNIX,
             type=sockets.SOCK_STREAM,
         )
+        socket.settimeout(1)
         socket.connect(str(socket_path))
         return cls(socket)
 
