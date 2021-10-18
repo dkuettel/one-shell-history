@@ -134,7 +134,7 @@ class OshProxy:
             while True:
                 stream.write(batch_size)
                 events = stream.read()
-                if len(events) == []:
+                if events == []:
                     break
                 yield from (Event.from_json_dict(e) for e in events)
         finally:
