@@ -41,11 +41,6 @@ def fzf(entries, /, **kwargs) -> Result:
                 break
             p.stdin.write((str(entry) + "\n").encode("utf-8"))
             p.stdin.flush()
-        # TODO we need to completely flush entries so that things are cleaned-up, a bit of a hack
-        # otherwise, if entries is a generator that consumes from a socket, it will never close the socket
-        # this will make the server unresponsive after that
-        # would it be more correct for the caller to run del(entries) and do it in __del__?
-        list(entries)
 
         try:
             # TODO maybe that only needs to happen in the for else case?

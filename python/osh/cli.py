@@ -115,10 +115,11 @@ def search(ctx, query, filter_failed, filter_ignored):
     events = []
 
     def gen_events():
-        for event in history.search(
+        results = history.search(
             filter_failed_at=1.0 if filter_failed else None,
             filter_ignored=filter_ignored,
-        ):
+        )
+        for event in results:
             events.append(event)
             yield event
 
@@ -143,6 +144,7 @@ def search(ctx, query, filter_failed, filter_ignored):
         # not just useful for command that have new lines (which we need to escape now)
         # also for meta info like folders would be easier now
     )
+    del formatted  # this lets the osh service know that we can stop streaming results
 
     if result.key == "enter":
         if result.selection is None:
@@ -243,6 +245,7 @@ def search_backwards(ctx, query, session, session_id, session_start):
         tiebreak="index",
         expect="enter,ctrl-c,ctrl-e",
     )
+    del events  # this lets the osh service know that we can stop streaming results
 
     if result.key == "enter":
         if result.selection is None:
