@@ -114,7 +114,8 @@ def run_server(socket_path: Path, server, notify_systemd: bool = True):
                     target = stream.read()
                     print(f"rpc target {target}")
                     targets[target](stream)
-                except (ConnectionError, TimeoutError) as e:
+                except (ConnectionError, TimeoutError, sockets.timeout) as e:
+                    # TODO documentation says sockets.timeout is an alias for TimeoutError, but it doesnt work when I dont use both
                     print(f"rpc target {target} failed with {e}")
                 except Exit:
                     break
