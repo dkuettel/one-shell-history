@@ -1,4 +1,5 @@
 import math
+import os
 import socket as sockets
 import sys
 import time
@@ -24,12 +25,15 @@ def make_osh_proxy():
     return OshProxy()
 
 
-# TODO server should be default? and there is a env variable to change that?
 @click.group()
-@click.option("--server/--no-server", default=False)
-def cli(server):
+@click.option(
+    "--use-server/--no-use-server",
+    "-s/-d",
+    default=bool(os.environ.get("__osh_use_server", True)),
+)
+def cli(use_server):
     global history
-    if server:
+    if use_server:
         history = make_osh_proxy()
         try:
             history.is_alive()
