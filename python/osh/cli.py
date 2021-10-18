@@ -14,15 +14,53 @@ from osh.history import Event
 from osh.rpc import NoServerException
 from osh.utils import seconds_to_slang, str_mark_trailing_spaces
 
-history = None
+_direct = None
+_proxy = None
 
 
-def make_osh():
-    return Osh()
+def get_history_direct():
+    global _direct
+    if _direct is None:
+        _direct = Osh()
+    return _direct
 
 
-def make_osh_proxy():
-    return OshProxy()
+def get_history_proxy():
+    global _proxy
+    if _proxy is None:
+        try:
+            _proxy = OshProxy()
+            _proxy.is_alive()
+        except Exception as e:
+            _proxy = e
+            raise e
+    if isinstance(_proxy, Exception):
+        raise _proxy
+    return _proxy
+
+
+def get_history_proxy_or_direct():
+    global _proxy
+
+    if _proxy is None:
+        try:
+            _proxy = OshProxy()
+            _proxy.is_alive()
+        except Exception as e:
+            print(
+                f"Warning: Using direct mode, cannot access osh service @{_proxy.socket_path.resolve()}, {e}.",
+                file=sys.stderr,
+            )
+            _proxy = e
+
+    if not isinstance(_proxy, Exception):
+        return _proxy
+
+    return get_history_direct()
+
+
+def get_history():
+    raise NotImplementedError()
 
 
 @click.group()
@@ -32,19 +70,8 @@ def make_osh_proxy():
     default=bool(os.environ.get("__osh_use_service", True)),
 )
 def cli(use_service):
-    global history
-    if use_service:
-        history = make_osh_proxy()
-        try:
-            history.is_alive()
-        except (NoServerException, sockets.timeout) as e:
-            print(
-                f"Warning: Using direct mode, cannot access osh service @{history.socket_path.resolve()}, {e}.",
-                file=sys.stderr,
-            )
-            history = make_osh()
-    else:
-        history = make_osh()
+    global get_history
+    get_history = get_history_proxy_or_direct if use_service else get_history_direct
 
 
 def format_aggregated_events(events):
@@ -83,7 +110,7 @@ def format_aggregated_events(events):
 @click.pass_context
 def search(ctx, query, filter_failed, filter_ignored):
 
-    global history
+    history = get_history()
 
     events = []
 
@@ -167,7 +194,7 @@ def search(ctx, query, filter_failed, filter_ignored):
 @click.pass_context
 def search_backwards(ctx, query, session, session_id, session_start):
 
-    global history
+    history = get_history()
 
     session = session and (session_id is not None)
 
@@ -252,7 +279,7 @@ def previous_event(timestamp, prefix, session_id, session_start):
     if session_start is not None:
         session_start = datetime.fromtimestamp(session_start, tz=timezone.utc)
 
-    global history
+    history = get_history()
     event = history.previous_event(timestamp, prefix, session_id, session_start)
 
     if event is None:
@@ -276,7 +303,7 @@ def next_event(timestamp, prefix, session_id, session_start):
     if session_start is not None:
         session_start = datetime.fromtimestamp(session_start, tz=timezone.utc)
 
-    global history
+    history = get_history()
     event = history.next_event(timestamp, prefix, session_id, session_start)
 
     if event is None:
@@ -304,7 +331,7 @@ def append_event(
     session,
 ):
 
-    global history
+    history = get_history()
 
     starttime = datetime.fromtimestamp(starttime, tz=timezone.utc)
     endtime = datetime.fromtimestamp(endtime, tz=timezone.utc)
@@ -324,7 +351,7 @@ def append_event(
 
 @cli.command()
 def stats():
-    global history
+    history = get_history()
     s = history.get_statistics()
     print()
     print("Hello Commander, your situation report:")
@@ -350,7 +377,7 @@ def stats():
 
 @cli.command()
 def run_server():
-    history = Osh()
+    history = get_history_direct()
     server = OshServer(history)
     # TODO note in systemd we are piped and by default it buffers a lot, so we dont see messages
     # anyway use a proper logger, then not an issue? how does logger and systemd go together?
@@ -361,7 +388,7 @@ def run_server():
 
 @cli.command()
 def stop_server():
-    OshProxy().exit()
+    get_history_proxy().exit()
 
 
 @cli.command()
