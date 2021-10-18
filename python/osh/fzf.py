@@ -44,6 +44,7 @@ def fzf(entries, /, **kwargs) -> Result:
         # TODO we need to completely flush entries so that things are cleaned-up, a bit of a hack
         # otherwise, if entries is a generator that consumes from a socket, it will never close the socket
         # this will make the server unresponsive after that
+        # would it be more correct for the caller to run del(entries) and do it in __del__?
         list(entries)
 
         try:
