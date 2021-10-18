@@ -52,6 +52,7 @@ class Osh:
         session_id: Optional[str] = None,
         session_start: Optional[datetime.datetime] = None,
     ):
+        # TODO make that a function in queries? since it's not state-based, just on list of events?
         yield from self.backwards_query.generate_results(
             session=session_id,
             no_older_than=session_start,
@@ -82,6 +83,7 @@ class Osh:
         )
 
     def append_event(self, event: Event):
+        # TODO create if not there? generally just work out of the box if anything is missing
         append_event_to_osh_file(self.dot / defaults.local, event)
 
     def get_statistics(self) -> Statistics:
