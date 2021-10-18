@@ -27,8 +27,8 @@ def remote(method):
     def wrapper(self, *args, **kwargs):
         try:
             stream = Stream.from_path(self.socket_path)
-        except (FileNotFoundError, ConnectionRefusedError, TimeoutError) as e:
-            raise NoServerException from e
+        except (FileNotFoundError, ConnectionRefusedError, TimeoutError, sockets.timeout) as e:
+            raise NoServerException(e) from e
         stream.write(method.__name__)
         result = method(self, stream, *args, **kwargs)
 
