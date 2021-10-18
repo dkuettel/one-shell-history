@@ -39,11 +39,15 @@ def fzf(entries, /, **kwargs) -> Result:
         for entry in entries:
             if p.poll() is not None:
                 break
-            p.stdin.write((str(entry) + "\n").encode("utf-8"))
-            p.stdin.flush()
+            try:
+                p.stdin.write((str(entry) + "\n").encode("utf-8"))
+                p.stdin.flush()
+            except ConnectionError as e:
+                if p.poll() is not None:
+                    break
+                raise e
 
         try:
-            # TODO maybe that only needs to happen in the for else case?
             p.stdin.close()
         except:
             pass
