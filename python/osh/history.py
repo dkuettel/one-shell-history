@@ -10,6 +10,9 @@ from pathlib import Path
 from typing import Iterable, List, Optional
 
 
+# TODO think about what goes in this file, circular and all
+
+
 @dataclass(frozen=True)
 class Event:
     timestamp: datetime.datetime
