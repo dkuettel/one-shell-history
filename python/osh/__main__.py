@@ -1,4 +1,5 @@
 import math
+import socket as sockets
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -29,6 +30,14 @@ def cli(server):
     global history
     if server:
         history = make_osh_proxy()
+        try:
+            history.is_alive()
+        except (NoServerException, sockets.timeout) as e:
+            print(
+                f"Warning: Using direct mode, cannot access osh service @{history.socket_path.resolve()}, {e}.",
+                file=sys.stderr,
+            )
+            history = make_osh()
     else:
         history = make_osh()
 
@@ -304,18 +313,7 @@ def append_event(
         session=session,
     )
 
-    try:
-        history.append_event(event)
-    except NoServerException:
-        print(
-            "[0;7mWarning: Could not contact the osh service.[0m",
-            file=sys.stderr,
-        )
-        make_osh().append_event(event)
-        print(
-            "[0;7mThe event was added directly to the history.[0m",
-            file=sys.stderr,
-        )
+    history.append_event(event)
 
 
 @cli.command()
