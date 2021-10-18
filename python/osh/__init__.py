@@ -4,6 +4,7 @@ import datetime
 import socket as sockets
 from dataclasses import asdict, dataclass
 from functools import cache, cached_property
+from itertools import islice
 from pathlib import Path
 from typing import Optional
 
@@ -112,16 +113,32 @@ class OshProxy:
     @rpc.remote
     def search(self, stream, filter_failed_at, filter_ignored):
         stream.write((filter_failed_at, filter_ignored))
-        while (command := stream.read()) is not None:
-            yield UniqueCommand.from_json_dict(command)
+        batch_size = 1000
+        try:
+            while True:
+                stream.write(batch_size)
+                commands = stream.read()
+                if commands == []:
+                    break
+                yield from (UniqueCommand.from_json_dict(c) for c in commands)
+        finally:
+            stream.write(None)
 
     @rpc.remote
     def search_backwards(self, stream, session_id=None, session_start=None):
         if session_start is not None:
             session_start = session_start.isoformat()
         stream.write((session_id, session_start))
-        while (event := stream.read()) is not None:
-            yield Event.from_json_dict(event)
+        batch_size = 1000
+        try:
+            while True:
+                stream.write(batch_size)
+                events = stream.read()
+                if len(events) == []:
+                    break
+                yield from (Event.from_json_dict(e) for e in events)
+        finally:
+            stream.write(None)
 
     @rpc.remote
     def previous_event(
@@ -188,10 +205,8 @@ class OshServer:
     def search(self, stream):
         filter_failed_at, filter_ignored = stream.read()
         commands = self.history.search(filter_failed_at, filter_ignored)
-        for command in commands:
-            stream.write(command.to_json_dict())
-        # TODO this is to go into a generator, how do we detect when the generator stops reading? socket closed?
-        stream.write(None)
+        while (batch_size := stream.read()) is not None:
+            stream.write([c.to_json_dict() for c in islice(commands, batch_size)])
 
     @rpc.exposed
     def search_backwards(self, stream):
@@ -199,10 +214,8 @@ class OshServer:
         if session_start is not None:
             session_start = datetime.datetime.fromisoformat(session_start)
         events = self.history.search_backwards(session_id, session_start)
-        for event in events:
-            stream.write(event.to_json_dict())
-        # TODO this is to go into a generator, how do we detect when the generator stops reading? socket closed?
-        stream.write(None)
+        while (batch_size := stream.read()) is not None:
+            stream.write([e.to_json_dict() for e in islice(events, batch_size)])
 
     @rpc.exposed
     def previous_event(self, stream):
