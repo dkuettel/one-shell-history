@@ -27,7 +27,11 @@ def remote(method):
     def wrapper(self, *args, **kwargs):
         try:
             stream = Stream.from_path(self.socket_path)
-        except (FileNotFoundError, ConnectionRefusedError, TimeoutError, sockets.timeout) as e:
+        except (
+            ConnectionError,
+            FileNotFoundError,
+            TimeoutError,
+        ) as e:
             raise NoServerException(e) from e
         stream.write(method.__name__)
         result = method(self, stream, *args, **kwargs)
@@ -104,18 +108,16 @@ def run_server(socket_path: Path, server, notify_systemd: bool = True):
                     print("warning: systemd-notify failed")
 
             while True:
+                print("rpc ready to accept")
                 stream = Stream.from_socket(socket.accept()[0])
                 try:
-                    targets[stream.read()](stream)
+                    target = stream.read()
+                    print(f"rpc target {target}")
+                    targets[target](stream)
+                except (ConnectionError, TimeoutError) as e:
+                    print(f"rpc target {target} failed with {e}")
                 except Exit:
                     break
-                except Exception as e:
-                    # TODO this seems to suppress the exception?!
-                    # try:
-                    #     stream.write_exception(e)
-                    # except:
-                    #     pass
-                    raise e
                 finally:
                     stream.close()
     finally:
@@ -164,4 +166,8 @@ class Stream:
         self.stream.flush()
 
     def close(self):
-        self.stream.close()
+        try:
+            # TODO socket or not?
+            self.stream.close()
+        except:
+            pass
