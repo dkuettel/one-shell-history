@@ -27,13 +27,13 @@ def make_osh_proxy():
 
 @click.group()
 @click.option(
-    "--use-server/--no-use-server",
+    "--use-service/--no-use-service",
     "-s/-d",
-    default=bool(os.environ.get("__osh_use_server", True)),
+    default=bool(os.environ.get("__osh_use_service", True)),
 )
-def cli(use_server):
+def cli(use_service):
     global history
-    if use_server:
+    if use_service:
         history = make_osh_proxy()
         try:
             history.is_alive()
