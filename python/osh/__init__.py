@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import datetime
+import socket as sockets
 from dataclasses import asdict, dataclass
 from functools import cache, cached_property
 from pathlib import Path
 from typing import Optional
 
 from osh import defaults, rpc
-from osh.event_filters import EventFilter
+from osh.event_filters import EventFilter, maybe_create_event_filter_config_file
 from osh.history import Event, History
-from osh.osh_files import append_event_to_osh_file
+from osh.osh_files import append_event_to_osh_file, create_osh_file
 from osh.queries import (
     BackwardsQuery,
     UniqueCommand,
@@ -23,11 +24,21 @@ class Osh:
     def __init__(self, dot: Path = defaults.dot):
         self.dot = dot
 
+        self.dot.mkdir(parents=True, exist_ok=True)
+        (self.dot / defaults.archive).mkdir(parents=True, exist_ok=True)
+        (self.dot / defaults.active).mkdir(parents=True, exist_ok=True)
+        maybe_create_event_filter_config_file(self.dot / defaults.event_filters)
+        if not (self.dot / defaults.local).exists():
+            target = self.dot / defaults.active / f"{sockets.gethostname()}.osh"
+            if not target.exists():
+                create_osh_file(target)
+                (self.dot / defaults.local).symlink_to(target.relative_to(self.dot))
+
     @cached_property
     def source(self):
         # TODO generally we want to call osh a history
         # rename History to a source? also move then maybe and no circular problems again
-        return History(self.dot / defaults.histories)
+        return History(self.dot)
 
     @cache
     def unique_commands_query(self, filter_ignored: bool):

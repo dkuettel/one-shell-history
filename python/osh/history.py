@@ -9,6 +9,7 @@ from dataclasses import astuple, dataclass, field
 from pathlib import Path
 from typing import Iterable, List, Optional
 
+from osh import defaults
 
 # TODO think about what goes in this file, circular and all
 
@@ -61,14 +62,14 @@ class History:
 
         self.path = path
         self.archived_osh = ArchivedSources(
-            path / "archive",
+            path / defaults.archive,
             ["**/*.osh", "**/*.osh_legacy"],
         )
         self.archived_other = ArchivedSources(
-            path / "archive",
+            path / defaults.archive,
             ["**/*.zsh_history"],
         )
-        self.active = ActiveSources(path)
+        self.active = ActiveSources(path / defaults.active)
         self.revision = 0
         self.events = []
         self.signature = (
