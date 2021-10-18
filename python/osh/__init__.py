@@ -93,6 +93,10 @@ class OshProxy:
         self.socket_path = socket_path
 
     @rpc.remote
+    def is_alive(self, stream) -> bool:
+        return stream.read()
+
+    @rpc.remote
     def search(self, stream, filter_failed_at, filter_ignored):
         stream.write((filter_failed_at, filter_ignored))
         while (command := stream.read()) is not None:
@@ -162,6 +166,10 @@ class OshProxy:
 class OshServer:
     def __init__(self, history: Osh):
         self.history = history
+
+    @rpc.exposed
+    def is_alive(self, stream):
+        stream.write(True)
 
     @rpc.exposed
     def search(self, stream):
