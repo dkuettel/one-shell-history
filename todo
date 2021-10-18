@@ -1,13 +1,24 @@
 
 next:
+- generally works, running already as replacement, old version is deactivated
+- eventually copy the final osh-legacy over and move on
+- see if it works on ptc desktop and with dbox sync or syncthing
+- then see if ctrl-p works fast enough, components are there, but not yet combined
+
+sockets and streams:
+- do I need to be more careful who closes stuff and who waits?
+- like receiver says None when done with results, server stops producing, but server reading None might fail if client already closed?
+- is it possible to wait for other side's close?
+
+next:
 - make zsh integration based on bin/osh
 - bin/osh in path, symlink works?
 - see about bash history source, same format?
     - eventually see how to integrate with bash
     - do it with marco
     - might use multipass to have a clean system to see how it acts?
-- clean up old code, remove
-    - make sure there are no todos to go missing
+x clean up old code, remove
+    x make sure there are no todos to go missing
 - try dbox sync see how it reacts
 - maybe think about git sync
 
