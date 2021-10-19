@@ -1,9 +1,9 @@
 
 next:
-- generally works, running already as replacement, old version is deactivated
-- eventually copy the final osh-legacy over and move on
-- see if it works on ptc desktop and with dbox sync or syncthing
-- then see if ctrl-p works fast enough, components are there, but not yet combined
+x generally works, running already as replacement, old version is deactivated
+x eventually copy the final osh-legacy over and move on
+x see if it works on ptc desktop and with dbox sync or syncthing
+o then see if ctrl-p works fast enough, components are there, but not yet combined
 
 sockets and streams:
 - do I need to be more careful who closes stuff and who waits?
