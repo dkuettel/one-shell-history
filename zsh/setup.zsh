@@ -3,18 +3,19 @@
 # TODO we dont require it in the path, up to the user if he wants to call 'osh stats' and the like
 __osh=$(realpath ${0:a:h}/../bin/osh)
 
-if [[ -v __osh_session_id ]]; then
+function __osh {
+    $__osh_path $@
+}
+
+if [[ ! -v __osh_session_id ]]; then
     __osh_session_id=$(uuidgen)
 fi
 
-if [[ -v __osh_session_start ]]; then
+if [[ ! -v __osh_session_start ]]; then
     __osh_session_start=$(date '+%s.%N')
 fi
 
 autoload -U add-zsh-hook
-
-__osh_base=${0:a:h}/..
-__osh_base=${__osh_base:a}
 
 function __osh_before {
     local command=${1[0,-2]}
@@ -56,7 +57,7 @@ bindkey -M vicmd '^r' __osh_search
 bindkey -M viins '^r' __osh_search
 
 function __osh_search_backwards {
-    BUFFER=$(__osh search-backwards --query=$BUFFER --session --session-id=$__osh_session_id, --sesion-start=$__osh_session_start)
+    BUFFER=$(__osh search-backwards --query=$BUFFER --session --session-id=$__osh_session_id --session-start=$__osh_session_start)
     CURSOR=$#BUFFER
     zle reset-prompt
 }
