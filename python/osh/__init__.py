@@ -73,25 +73,27 @@ class Osh:
     def previous_event(
         self,
         timestamp: datetime.datetime,
-        prefix: Optional[str],
+        prefix: Optional[str] = None,
+        ignore: Optional[str] = None,
         session_id: Optional[str] = None,
         session_start: Optional[datetime.datetime] = None,
     ):
         self.source.refresh()
         return query_previous_event(
-            self.source.events, timestamp, prefix, session_id, session_start
+            self.source.events, timestamp, prefix, ignore, session_id, session_start
         )
 
     def next_event(
         self,
         timestamp: datetime.datetime,
-        prefix: Optional[str],
+        prefix: Optional[str] = None,
+        ignore: Optional[str] = None,
         session_id: Optional[str] = None,
         session_start: Optional[datetime.datetime] = None,
     ):
         self.source.refresh()
         return query_next_event(
-            self.source.events, timestamp, prefix, session_id, session_start
+            self.source.events, timestamp, prefix, ignore, session_id, session_start
         )
 
     def append_event(self, event: Event):
@@ -144,16 +146,17 @@ class OshProxy:
     def previous_event(
         self,
         stream,
-        timestamp: datetime.datetime,
-        prefix: Optional[str],
-        session_id: Optional[str] = None,
-        session_start: Optional[datetime.datetime] = None,
+        timestamp,
+        prefix=None,
+        ignore=None,
+        session_id=None,
+        session_start=None,
     ):
         timestamp = timestamp.isoformat()
         if session_start is not None:
             session_start = session_start.isoformat()
 
-        stream.write((timestamp, prefix, session_id, session_start))
+        stream.write((timestamp, prefix, ignore, session_id, session_start))
         event = stream.read()
 
         if event is None:
@@ -165,15 +168,16 @@ class OshProxy:
         self,
         stream,
         timestamp: datetime.datetime,
-        prefix: Optional[str],
-        session_id: Optional[str] = None,
-        session_start: Optional[datetime.datetime] = None,
+        prefix=None,
+        ignore= None,
+        session_id=None,
+        session_start=None,
     ):
         timestamp = timestamp.isoformat()
         if session_start is not None:
             session_start = session_start.isoformat()
 
-        stream.write((timestamp, prefix, session_id, session_start))
+        stream.write((timestamp, prefix, ignore, session_id, session_start))
         event = stream.read()
 
         if event is None:
@@ -219,26 +223,28 @@ class OshServer:
 
     @rpc.exposed
     def previous_event(self, stream):
-        timestamp, prefix, session_id, session_start = stream.read()
+        timestamp, prefix, ignore, session_id, session_start = stream.read()
         timestamp = datetime.datetime.fromisoformat(timestamp)
         if session_start is not None:
             session_start = datetime.datetime.fromisoformat(session_start)
         event = self.history.previous_event(
-            timestamp, prefix, session_id, session_start
+            timestamp, prefix, ignore, session_id, session_start
         )
         if event is None:
             stream.write(None)
+            return
         stream.write(event.to_json_dict())
 
     @rpc.exposed
     def next_event(self, stream):
-        timestamp, prefix, session_id, session_start = stream.read()
+        timestamp, prefix, ignore, session_id, session_start = stream.read()
         timestamp = datetime.datetime.fromisoformat(timestamp)
         if session_start is not None:
             session_start = datetime.datetime.fromisoformat(session_start)
-        event = self.history.next_event(timestamp, prefix, session_id, session_start)
+        event = self.history.next_event(timestamp, prefix, ignore, session_id, session_start)
         if event is None:
             stream.write(None)
+            return
         stream.write(event.to_json_dict())
 
     @rpc.exposed

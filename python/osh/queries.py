@@ -160,7 +160,8 @@ class BackwardsQuery:
 def query_previous_event(
     events: list[Event],
     timestamp: datetime.datetime,
-    prefix: Optional[str],
+    prefix: Optional[str] = None,
+    ignore: Optional[str] = None,
     session_id: Optional[str] = None,
     session_start: Optional[datetime.datetime] = None,
 ):
@@ -170,6 +171,8 @@ def query_previous_event(
         events = itertools.takewhile(lambda e: e.timestamp >= session_start, events)
     if prefix is not None:
         events = (e for e in events if e.command.startswith(prefix))
+    if ignore is not None:
+        events = (e for e in events if e.command != ignore)
     if session_id is not None:
         events = (e for e in events if e.session == session_id)
 
@@ -179,7 +182,8 @@ def query_previous_event(
 def query_next_event(
     events: list[Event],
     timestamp: datetime.datetime,
-    prefix: Optional[str],
+    prefix: Optional[str] = None,
+    ignore: Optional[str] = None,
     session_id: Optional[str] = None,
     session_start: Optional[datetime.datetime] = None,
 ):
@@ -190,6 +194,8 @@ def query_next_event(
         events = itertools.takewhile(lambda e: e.timestamp >= session_start, events)
     if prefix is not None:
         events = (e for e in events if e.command.startswith(prefix))
+    if ignore is not None:
+        events = (e for e in events if e.command != ignore)
     if session_id is not None:
         events = (e for e in events if e.session == session_id)
     candidate = None

@@ -271,9 +271,10 @@ def search_backwards(ctx, query, session, session_id, session_start):
 @cli.command()
 @click.option("--timestamp", type=float)
 @click.option("--prefix", type=str, default=None)
+@click.option("--ignore", type=str, default=None)
 @click.option("--session-id", type=str, default=None)
 @click.option("--session-start", type=float, default=None)
-def previous_event(timestamp, prefix, session_id, session_start):
+def previous_event(timestamp, prefix, ignore, session_id, session_start):
 
     tolerance = 1e-8
     timestamp = datetime.fromtimestamp(timestamp - tolerance, tz=timezone.utc)
@@ -283,7 +284,7 @@ def previous_event(timestamp, prefix, session_id, session_start):
         session_start = datetime.fromtimestamp(session_start, tz=timezone.utc)
 
     history = get_history()
-    event = history.previous_event(timestamp, prefix, session_id, session_start)
+    event = history.previous_event(timestamp, prefix, ignore, session_id, session_start)
 
     if event is None:
         sys.exit(1)
@@ -295,9 +296,10 @@ def previous_event(timestamp, prefix, session_id, session_start):
 @cli.command()
 @click.option("--timestamp", type=float)
 @click.option("--prefix", type=str, default=None)
+@click.option("--ignore", type=str, default=None)
 @click.option("--session-id", type=str, default=None)
 @click.option("--session-start", type=float, default=None)
-def next_event(timestamp, prefix, session_id, session_start):
+def next_event(timestamp, prefix, ignore, session_id, session_start):
 
     tolerance = 1e-8
     timestamp = datetime.fromtimestamp(timestamp + tolerance, tz=timezone.utc)
@@ -307,7 +309,7 @@ def next_event(timestamp, prefix, session_id, session_start):
         session_start = datetime.fromtimestamp(session_start, tz=timezone.utc)
 
     history = get_history()
-    event = history.next_event(timestamp, prefix, session_id, session_start)
+    event = history.next_event(timestamp, prefix, ignore, session_id, session_start)
 
     if event is None:
         sys.exit(1)
