@@ -1,6 +1,16 @@
 
+now:
+- pickle is much faster than json, rpc likes that
+    - after that change we are even closer to making it super generic anyway
+    - generally also thinking about where we make flush, lets send large pickles whenever possible
+    - rpc exception still needed?
+    - UniqeCommand sends full counter, too much data?
+    - faster now, but is it the speed we can expect? dumping commands list to pickle file is about the same
+
+
 next:
 - esc in fzf makes it fail later, because we dont expect that key?
+- see if glob does too much work or even loads wrong files if archive or active is a git folder, ignore dot-folders?
 - bin/osh in path, symlink works?
 - move master to main also on remote? I think yves needs to know then (?)
     - do it before anyone else uses it
@@ -16,6 +26,7 @@ nice to have:
     - is there a better way to combine it? --preview could point to a python function, that would be even nicer
      - ok in our case we could do a request to the server, and maybe easy in linux because it's plain http
 - sanity checker for archive, see if any duplicates or stuff
+    - especially if you copied one twice earlier and later they will have so much overlap, one should have more (into the future)
     - or based on an incoming file that you point at
 - something to test the events-filter file to double check, or add/remove from cli
 - version output or so, status of service or other things
