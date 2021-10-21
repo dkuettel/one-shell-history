@@ -122,14 +122,12 @@ class OshProxy:
                 commands = stream.read()
                 if commands == []:
                     break
-                yield from (UniqueCommand.from_json_dict(c) for c in commands)
+                yield from commands
         finally:
             stream.write(None)
 
     @rpc.remote
     def search_backwards(self, stream, session_id=None, session_start=None):
-        if session_start is not None:
-            session_start = session_start.isoformat()
         stream.write((session_id, session_start))
         batch_size = 1000
         try:
@@ -138,7 +136,7 @@ class OshProxy:
                 events = stream.read()
                 if events == []:
                     break
-                yield from (Event.from_json_dict(e) for e in events)
+                yield from events
         finally:
             stream.write(None)
 
@@ -152,16 +150,8 @@ class OshProxy:
         session_id=None,
         session_start=None,
     ):
-        timestamp = timestamp.isoformat()
-        if session_start is not None:
-            session_start = session_start.isoformat()
-
         stream.write((timestamp, prefix, ignore, session_id, session_start))
-        event = stream.read()
-
-        if event is None:
-            return None
-        return Event.from_json_dict(event)
+        return stream.read()
 
     @rpc.remote
     def next_event(
@@ -169,28 +159,20 @@ class OshProxy:
         stream,
         timestamp: datetime.datetime,
         prefix=None,
-        ignore= None,
+        ignore=None,
         session_id=None,
         session_start=None,
     ):
-        timestamp = timestamp.isoformat()
-        if session_start is not None:
-            session_start = session_start.isoformat()
-
         stream.write((timestamp, prefix, ignore, session_id, session_start))
-        event = stream.read()
-
-        if event is None:
-            return None
-        return Event.from_json_dict(event)
+        return stream.read()
 
     @rpc.remote
     def append_event(self, stream, event: Event):
-        stream.write(event.to_json_dict())
+        stream.write(event)
 
     @rpc.remote
     def get_statistics(self, stream) -> Statistics:
-        return Statistics.from_json_dict(stream.read())
+        return stream.read()
 
     @rpc.remote
     def exit(self, stream):
@@ -210,50 +192,38 @@ class OshServer:
         filter_failed_at, filter_ignored = stream.read()
         commands = self.history.search(filter_failed_at, filter_ignored)
         while (batch_size := stream.read()) is not None:
-            stream.write([c.to_json_dict() for c in islice(commands, batch_size)])
+            stream.write(list(islice(commands, batch_size)))
 
     @rpc.exposed
     def search_backwards(self, stream):
         session_id, session_start = stream.read()
-        if session_start is not None:
-            session_start = datetime.datetime.fromisoformat(session_start)
         events = self.history.search_backwards(session_id, session_start)
         while (batch_size := stream.read()) is not None:
-            stream.write([e.to_json_dict() for e in islice(events, batch_size)])
+            stream.write(list(islice(events, batch_size)))
 
     @rpc.exposed
     def previous_event(self, stream):
         timestamp, prefix, ignore, session_id, session_start = stream.read()
-        timestamp = datetime.datetime.fromisoformat(timestamp)
-        if session_start is not None:
-            session_start = datetime.datetime.fromisoformat(session_start)
         event = self.history.previous_event(
             timestamp, prefix, ignore, session_id, session_start
         )
-        if event is None:
-            stream.write(None)
-            return
-        stream.write(event.to_json_dict())
+        stream.write(event)
 
     @rpc.exposed
     def next_event(self, stream):
         timestamp, prefix, ignore, session_id, session_start = stream.read()
-        timestamp = datetime.datetime.fromisoformat(timestamp)
-        if session_start is not None:
-            session_start = datetime.datetime.fromisoformat(session_start)
-        event = self.history.next_event(timestamp, prefix, ignore, session_id, session_start)
-        if event is None:
-            stream.write(None)
-            return
-        stream.write(event.to_json_dict())
+        event = self.history.next_event(
+            timestamp, prefix, ignore, session_id, session_start
+        )
+        stream.write(event)
 
     @rpc.exposed
     def append_event(self, stream):
-        self.history.append_event(Event.from_json_dict(stream.read()))
+        self.history.append_event(stream.read())
 
     @rpc.exposed
     def get_statistics(self, stream):
-        stream.write(self.history.get_statistics().to_json_dict())
+        stream.write(self.history.get_statistics())
 
     @rpc.exposed
     def exit(self, stream):
