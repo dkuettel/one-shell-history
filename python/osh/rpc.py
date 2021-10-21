@@ -1,7 +1,7 @@
 import inspect
-import io
 import json
 import os
+import pickle
 import socket as sockets
 from pathlib import Path
 from typing import Callable
@@ -130,7 +130,7 @@ class Stream:
     def __init__(self, socket):
         socket.settimeout(1)
         # TODO should we also close the socket? we dont keep it now
-        self.stream = io.TextIOWrapper(socket.makefile(mode="rwb"))
+        self.stream = socket.makefile(mode="rwb")
 
     @classmethod
     def from_socket(cls, socket):
@@ -147,23 +147,18 @@ class Stream:
         return cls(socket)
 
     def write(self, message):
-        self.stream.write(json.dumps((None, message)) + "\n")
+        # TODO we dont actually send exceptions anymore, lets leave it? instead send a generic fail when we exit?
+        pickle.dump((None, message), self.stream)
         self.stream.flush()
 
     def read(self):
-        try:
-            reply = self.stream.readline()
-            if reply == "":
-                raise ConnectionClosed()
-            exception, message = json.loads(reply)
-        except json.JSONDecodeError as e:
-            raise Exception(f"Malformed reply from rpc server: {json.dumps(reply)}")
+        exception, message = pickle.load(self.stream)
         if exception is not None:
             raise RemoteException(exception)
         return message
 
     def write_exception(self, exception):
-        self.stream.write(json.dumps((str(exception), None)) + "\n")
+        pickle.dump((exception, None), self.stream)
         self.stream.flush()
 
     def close(self):
