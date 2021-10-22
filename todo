@@ -9,7 +9,7 @@ x pickle is much faster than json, rpc likes that
 
 
 next:
-- esc in fzf makes it fail later, because we dont expect that key?
+x esc in fzf makes it fail later, because we dont expect that key?
 - see if glob does too much work or even loads wrong files if archive or active is a git folder, ignore dot-folders?
 - bin/osh in path, symlink works?
 - move master to main also on remote? I think yves needs to know then (?)

@@ -140,7 +140,7 @@ def search(ctx, query, filter_failed, filter_ignored):
         preview_window="down:10:wrap",
         preview="echo {2}; echo {3}; echo {4}; echo; echo {5..}",
         print_query=True,
-        expect="enter,ctrl-c,ctrl-x,ctrl-r",
+        expect="enter,ctrl-c,esc,ctrl-x,ctrl-r",
         tiebreak="index",
         # TODO --read0 and we could have newlines in the data? also then --print0?
         # lets see how it looks with newlines, could be convenient
@@ -157,7 +157,7 @@ def search(ctx, query, filter_failed, filter_ignored):
             event = events[index]
             print(event.command)
 
-    elif result.key == "ctrl-c":
+    elif result.key in {"ctrl-c", "esc"}:
         print(query)
 
     elif result.key == "ctrl-x":
@@ -246,19 +246,19 @@ def search_backwards(ctx, query, session, session_id, session_start):
         preview_window="down:10:wrap",
         preview="echo {2}; echo {4..}",
         tiebreak="index",
-        expect="enter,ctrl-c,ctrl-e",
+        expect="enter,ctrl-c,esc,ctrl-e",
     )
     del events  # this lets the osh service know that we can stop streaming results
 
     if result.key == "enter":
         if result.selection is None:
-            print()
+            print(query)
         else:
             index = int(result.selection.split(" --- ", maxsplit=1)[0])
             event = event_by_index[index]
             print(event.command)
-    elif result.key == "ctrl-c":
-        print()
+    elif result.key in {"ctrl-c", "esc"}:
+        print(query)
     elif result.key == "ctrl-e":
         # switch between per-session and global
         ctx.invoke(
