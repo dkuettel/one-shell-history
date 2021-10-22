@@ -8,7 +8,7 @@ from itertools import islice
 from pathlib import Path
 from typing import Optional
 
-from osh import defaults, rpc
+from osh import defaults
 from osh.event_filters import EventFilter, maybe_create_event_filter_config_file
 from osh.history import Event, History
 from osh.osh_files import append_event_to_osh_file, create_osh_file
@@ -102,132 +102,6 @@ class Osh:
 
     def get_statistics(self) -> Statistics:
         return Statistics.from_source(self.source)
-
-
-class OshProxy:
-    def __init__(self, socket_path: Path = defaults.dot / defaults.socket):
-        self.socket_path = socket_path
-
-    @rpc.remote
-    def is_alive(self, stream) -> bool:
-        return stream.read()
-
-    @rpc.remote
-    def search(self, stream, filter_failed_at, filter_ignored):
-        stream.write((filter_failed_at, filter_ignored))
-        batch_size = 1000
-        try:
-            while True:
-                stream.write(batch_size)
-                commands = stream.read()
-                if commands == []:
-                    break
-                yield from commands
-        finally:
-            stream.write(None)
-
-    @rpc.remote
-    def search_backwards(self, stream, session_id=None, session_start=None):
-        stream.write((session_id, session_start))
-        batch_size = 1000
-        try:
-            while True:
-                stream.write(batch_size)
-                events = stream.read()
-                if events == []:
-                    break
-                yield from events
-        finally:
-            stream.write(None)
-
-    @rpc.remote
-    def previous_event(
-        self,
-        stream,
-        timestamp,
-        prefix=None,
-        ignore=None,
-        session_id=None,
-        session_start=None,
-    ):
-        stream.write((timestamp, prefix, ignore, session_id, session_start))
-        return stream.read()
-
-    @rpc.remote
-    def next_event(
-        self,
-        stream,
-        timestamp: datetime.datetime,
-        prefix=None,
-        ignore=None,
-        session_id=None,
-        session_start=None,
-    ):
-        stream.write((timestamp, prefix, ignore, session_id, session_start))
-        return stream.read()
-
-    @rpc.remote
-    def append_event(self, stream, event: Event):
-        stream.write(event)
-
-    @rpc.remote
-    def get_statistics(self, stream) -> Statistics:
-        return stream.read()
-
-    @rpc.remote
-    def exit(self, stream):
-        pass
-
-
-class OshServer:
-    def __init__(self, history: Osh):
-        self.history = history
-
-    @rpc.exposed
-    def is_alive(self, stream):
-        stream.write(True)
-
-    @rpc.exposed
-    def search(self, stream):
-        filter_failed_at, filter_ignored = stream.read()
-        commands = self.history.search(filter_failed_at, filter_ignored)
-        while (batch_size := stream.read()) is not None:
-            stream.write(list(islice(commands, batch_size)))
-
-    @rpc.exposed
-    def search_backwards(self, stream):
-        session_id, session_start = stream.read()
-        events = self.history.search_backwards(session_id, session_start)
-        while (batch_size := stream.read()) is not None:
-            stream.write(list(islice(events, batch_size)))
-
-    @rpc.exposed
-    def previous_event(self, stream):
-        timestamp, prefix, ignore, session_id, session_start = stream.read()
-        event = self.history.previous_event(
-            timestamp, prefix, ignore, session_id, session_start
-        )
-        stream.write(event)
-
-    @rpc.exposed
-    def next_event(self, stream):
-        timestamp, prefix, ignore, session_id, session_start = stream.read()
-        event = self.history.next_event(
-            timestamp, prefix, ignore, session_id, session_start
-        )
-        stream.write(event)
-
-    @rpc.exposed
-    def append_event(self, stream):
-        self.history.append_event(stream.read())
-
-    @rpc.exposed
-    def get_statistics(self, stream):
-        stream.write(self.history.get_statistics())
-
-    @rpc.exposed
-    def exit(self, stream):
-        raise rpc.Exit()
 
 
 @dataclass

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import click
 
-from osh import Osh, OshProxy, OshServer, defaults, rpc
+from osh import Osh, defaults, rpc
 from osh.fzf import fzf
 from osh.history import Event
 from osh.rpc import NoServerException
@@ -29,7 +29,7 @@ def get_history_proxy():
     global _proxy
     if _proxy is None:
         try:
-            _proxy = OshProxy()
+            _proxy = rpc.Proxy(defaults.dot / defaults.socket)
             _proxy.is_alive()
         except Exception as e:
             _proxy = e
@@ -44,11 +44,11 @@ def get_history_proxy_or_direct():
 
     if _proxy is None:
         try:
-            _proxy = OshProxy()
+            _proxy = rpc.Proxy(defaults.dot / defaults.socket)
             _proxy.is_alive()
         except Exception as e:
             print(
-                f"Warning: Using direct mode, cannot access osh service @{_proxy.socket_path.resolve()}, {e}.",
+                f"Warning: Using direct mode, cannot access osh service @{_proxy._path.resolve()}, {e}.",
                 file=sys.stderr,
             )
             _proxy = e
@@ -80,6 +80,7 @@ def format_aggregated_events(events):
 
     for index, event in enumerate(events):
 
+        # TODO this is also a bit slow
         fzf_ago = seconds_to_slang((now - event.most_recent_timestamp).total_seconds())
 
         if event.fail_ratio is None:
@@ -89,6 +90,8 @@ def format_aggregated_events(events):
         fzf_info = f"[{fzf_ago} ago] [{event.occurrence_count} calls, {fzf_failed}]"
 
         fzf_folders1 = f"[most recent folder: {event.most_recent_folder}]"
+        # TODO this is slow, also we dont need to send the full list of folders, only aggregated is good enough, less data to send, already aggregated too
+        # especially the most_common(3) is slow
         fzf_folders2 = (
             "[" + ", ".join(f"{c}x {f}" for f, c in event.folders.most_common(3)) + "]"
         )
@@ -383,11 +386,10 @@ def stats():
 @cli.command()
 def run_server():
     history = get_history_direct()
-    server = OshServer(history)
     # TODO note in systemd we are piped and by default it buffers a lot, so we dont see messages
     # anyway use a proper logger, then not an issue? how does logger and systemd go together?
     print("start server", flush=True)
-    rpc.run_server(defaults.dot / defaults.socket, server)
+    rpc.run_server(defaults.dot / defaults.socket, history)
     print("server exits", flush=True)
 
 
