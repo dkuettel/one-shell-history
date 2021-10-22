@@ -1,10 +1,10 @@
 
 now:
-- pickle is much faster than json, rpc likes that
-    - after that change we are even closer to making it super generic anyway
-    - generally also thinking about where we make flush, lets send large pickles whenever possible
-    - rpc exception still needed?
-    - UniqeCommand sends full counter, too much data?
+x pickle is much faster than json, rpc likes that
+    x after that change we are even closer to making it super generic anyway
+    x generally also thinking about where we make flush, lets send large pickles whenever possible
+    x rpc exception still needed?
+    - UniqueCommand sends full counter, too much data?
     - faster now, but is it the speed we can expect? dumping commands list to pickle file is about the same
 
 
