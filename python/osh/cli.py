@@ -1,5 +1,6 @@
 import math
 import os
+import random
 import socket as sockets
 import sys
 import time
@@ -363,24 +364,63 @@ def stats():
     s = history.get_statistics()
     print()
     print("Hello Commander, your situation report:")
-    if s.count == 0:
+    print()
+    if s is None:
         print("  No data as of yet.")
     else:
-        days = max(
-            1,
-            math.ceil((s.latest - s.earliest).total_seconds() / (60 * 60 * 24)),
+        total_days = round(
+            (s.last_event.timestamp - s.first_event.timestamp).total_seconds()
+            / (60 * 60 * 24)
         )
-        per_day = round(s.count / days)
-        print(f"  - {s.count:,} events")
-        print(f"  - over {days:,} days")
-        print(f"  - between {s.earliest.date()} and {s.latest.date()}")
-        print()
-        print(f"Sir, that's an incredible {per_day} commands per day,")
+        start = s.first_event.timestamp.date()
+        end = s.last_event.timestamp.date()
+        print(f"  Our classified documents cover your history from {start} to {end}.")
         print(
-            f"at a confirmed success rate of {round(100*s.success_rate)} over one hundred!"
+            f"  You have been on active duty for {s.active_days_count:,} days out of a total {total_days:,} days in the service."
+        )
+        print()
+        print(f"  Throughout your service you made {s.event_count:,} decisions.")
+        epic = random.choice(
+            [
+                "amazing",
+                "excellent",
+                "exceptional",
+                "eximious",
+                "extraordinary",
+                "fantastic",
+                "inconceivable",
+                "incredible",
+                "legendary",
+                "marvelous",
+                "mind-blowing",
+                "outlandish",
+                "outrageous",
+                "phenomenal",
+                "preposterous",
+                "radical",
+                "remarkable",
+                "shocking",
+                "striking",
+                "stupendous",
+                "superb",
+                "surprising",
+                "terrific",
+                "unbelievable",
+                "unheard-of",
+                "unimaginable",
+                "wicked",
+            ]
+        )
+        print(
+            f"  Sir, that's {'an' if epic[0] in 'aeiou' else 'a'} {epic} {s.active_day_average_event_count} decisions per day when on active duty."
+        )
+        print()
+        print(f"  Only {s.failure_count:,} of your efforts have met with failure.")
+        print(
+            f"  Your success rate is confirmed at {round(100*s.success_rate)} over one hundred."
         )
     print()
-    print(f"        -- Good day, Commander.")
+    print(f"-- Good day, Commander.")
 
 
 @cli.command()
