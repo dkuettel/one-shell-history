@@ -27,16 +27,16 @@ class Proxy:
         self._path = path
 
     def is_alive(self):
+        stream = Stream.from_path(self._path)
         try:
-            stream = Stream.from_path(self._path)
             stream.write(("is_alive", [], {}))
             return stream.read()
         finally:
             stream.close()
 
     def exit(self):
+        stream = Stream.from_path(self._path)
         try:
-            stream = Stream.from_path(self._path)
             stream.write(("exit", [], {}))
             return stream.read()
         finally:
