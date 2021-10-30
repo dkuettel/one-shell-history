@@ -106,22 +106,30 @@ class Osh:
 
 @dataclass
 class Statistics:
-    count: int = 0
-    earliest: Optional[datetime.datetime] = None
-    latest: Optional[datetime.datetime] = None
-    success_rate: Optional[float] = None
+    event_count: int
+    first_event: Event
+    last_event: Event
+    active_days_count: int
+    active_day_average_event_count: int
+    success_rate: float
+    failure_count: int
 
     @classmethod
     def from_source(cls, source: History):
         source.refresh()
-        count = len(source.events)
-        if count == 0:
-            return cls()
+        event_count = len(source.events)
+        if event_count == 0:
+            return None
+        active_days_count = len({e.timestamp.date() for e in source.events})
+        successful_event_count = sum(e.exit_code in {0, None} for e in source.events)
         return cls(
-            count=count,
-            earliest=min(e.timestamp for e in source.events),
-            latest=max(e.timestamp for e in source.events),
-            success_rate=sum(e.exit_code in {0, None} for e in source.events) / count,
+            event_count=event_count,
+            first_event=source.events[0],
+            last_event=source.events[-1],
+            active_days_count=active_days_count,
+            active_day_average_event_count=round(event_count / active_days_count),
+            success_rate=successful_event_count / event_count,
+            failure_count=event_count - successful_event_count,
         )
 
     def to_json_dict(self):
