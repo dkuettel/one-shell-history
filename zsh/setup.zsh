@@ -13,7 +13,6 @@ function __osh {
 
 __osh_session_id=$(uuidgen)
 __osh_session_start=$(date '+%s.%N')
-__osh_prefix_timestamp=$(date '+%s.%N')
 
 autoload -U add-zsh-hook
 
@@ -40,7 +39,8 @@ function __osh_after {
         __osh append-event $__osh_current_command &!
         unset __osh_current_command
     fi
-    __osh_prefix_timestamp=$(date '+%s.%N')
+    unset __osh_prefix_timestamp
+    unset __osh_prefix
 }
 
 add-zsh-hook zshaddhistory __osh_before
@@ -69,10 +69,13 @@ bindkey -M vicmd '^e' __osh_search_backwards
 bindkey -M viins '^e' __osh_search_backwards
 
 function __osh_previous {
+    __osh_prefix_timestamp=${__osh_prefix_timestamp-$(date '+%s.%N')}
+    __osh_prefix=${__osh_prefix-$BUFFER}
     # NOTE --ignore=$BUFFER would skip consecutive duplicates, sounds good, but not typically intuitive
-    if result=$(__osh previous-event --timestamp=$__osh_prefix_timestamp --prefix=$BUFFER[1,$CURSOR] --session-id=$__osh_session_id --session-start=$__osh_session_start); then
+    if result=$(__osh previous-event --timestamp=$__osh_prefix_timestamp --prefix=$__osh_prefix --session-id=$__osh_session_id --session-start=$__osh_session_start); then
         __osh_prefix_timestamp=$result[1,21]
         BUFFER=$result[23,-1]
+        CURSOR=$#BUFFER
     fi
     zle reset-prompt
 }
@@ -83,10 +86,13 @@ bindkey -M vicmd '^p' __osh_previous
 bindkey -M viins '^p' __osh_previous
 
 function __osh_next {
+    __osh_prefix_timestamp=${__osh_prefix_timestamp-$(date '+%s.%N')}
+    __osh_prefix=${__osh_prefix-$BUFFER}
     # NOTE --ignore=$BUFFER would skip consecutive duplicates, sounds good, but not typically intuitive
-    if result=$(__osh next-event --timestamp=$__osh_prefix_timestamp --prefix=$BUFFER[1,$CURSOR] --session-id=$__osh_session_id --session-start=$__osh_session_start); then
+    if result=$(__osh next-event --timestamp=$__osh_prefix_timestamp --prefix=$__osh_prefix --session-id=$__osh_session_id --session-start=$__osh_session_start); then
         __osh_prefix_timestamp=$result[1,21]
         BUFFER=$result[23,-1]
+        CURSOR=$#BUFFER
     fi
     zle reset-prompt
 }
