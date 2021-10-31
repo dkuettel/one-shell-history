@@ -5,26 +5,28 @@ cleanliness:
 
 
 ctrl-p and ctrl-n:
-- the original zsh behavior is a bit more complicated, not fully documented, but from observation
-- it does prefix search, but it always puts the cursor at the end of the buffer
-- not sure how it knows when to use the old prefix for the search and when to use the cursor position
-- or if it ever resets it
-- it seems that on first ctrl-p it will use whatever is there for prefix
-- then it doesnt change it until you make your first own change again, that's the new prefix from there on
-- it uses the full buffer as prefix, not the cursor position
-- and it always places you at the end
-- osh could implement it this way, to be close enough:
-    - __osh_prefix_timestamp and __osh_prefix_last
-    - on ctrl-p or -n, if prefix_last not set, set it to the full current buffer
-    - on search result put it in the buffer and move cursor to the end
-    - always on ctrl-p, if buffer==last_result, keep original prefix for search
-        - otherwise use current buffer for prefix search
-        - ctrl-c clears everything
-    - variables: __osh_prefix_timestamp, __osh_prefix_last_prefix, __osh_prefix_last_result
-    - or just check if ANY other key has been pressed in the meantime and then reset?
-    - I think I just go with ctrl-c or execute resets, but once a prefix is set, that's it
-    - then we always put the cursor at the end, seems close enough to original behaviour?
-    - also put it to the up arrows?
+x the original zsh behavior is a bit more complicated, not fully documented, but from observation
+x it does prefix search, but it always puts the cursor at the end of the buffer
+x not sure how it knows when to use the old prefix for the search and when to use the cursor position
+x or if it ever resets it
+x it seems that on first ctrl-p it will use whatever is there for prefix
+x then it doesnt change it until you make your first own change again, that's the new prefix from there on
+x it uses the full buffer as prefix, not the cursor position
+x and it always places you at the end
+x osh could implement it this way, to be close enough:
+    x __osh_prefix_timestamp and __osh_prefix_last
+    x on ctrl-p or -n, if prefix_last not set, set it to the full current buffer
+    x on search result put it in the buffer and move cursor to the end
+    x always on ctrl-p, if buffer==last_result, keep original prefix for search
+        x otherwise use current buffer for prefix search
+        x ctrl-c clears everything
+    x variables: __osh_prefix_timestamp, __osh_prefix_last_prefix, __osh_prefix_last_result
+    x or just check if ANY other key has been pressed in the meantime and then reset?
+    x I think I just go with ctrl-c or execute resets, but once a prefix is set, that's it
+    x then we always put the cursor at the end, seems close enough to original behaviour?
+- also put it to the up arrows?
+    - up arrows is global and ctrl-p is local?
+    - but how is it managed that up-arrow goes up in the multiline command before it goes up in the history? with ctrl-p that problem is not there
 
 
 now:
