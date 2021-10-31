@@ -9,6 +9,7 @@ import yaml
 class NoEventFilter:
     def __init__(self):
         self.revision = 0
+        self.success_return_codes = {0}
 
     def refresh(self):
         pass
@@ -23,6 +24,7 @@ def maybe_create_event_filter_config_file(path: Path):
         return
     path.write_text(
         r"""format: osh-event-filters-v1
+success_return_codes: [0]
 ignore-commands: # list commands you dont want to find in your search results (exact string matches)
   - top
 ignore-patterns: # list command patterns you dont want to find in your search results (python regular expressions)
@@ -40,6 +42,7 @@ class EventFilter:
         self.min_delay = 5
         self.ignored_commands = set()
         self.boring_patterns = set()
+        self.success_return_codes = {0}
 
     def refresh(self):
         try:
@@ -57,6 +60,10 @@ class EventFilter:
             data.pop("format")
             ignored_commands = set(data.pop("ignore-commands", []))
             boring_patterns = {re.compile(p) for p in data.pop("ignore-patterns", [])}
+
+            # TODO separate config file or more generic file (different name) when we also have this stuff in here?
+            success_return_codes = set(data.pop("success-return-codes", [0]))
+
             assert len(data) == 0, data
 
         except FileNotFoundError:
@@ -67,12 +74,14 @@ class EventFilter:
         if (
             self.ignored_commands == ignored_commands
             and self.boring_patterns == boring_patterns
+            and self.success_return_codes == success_return_codes
         ):
             return
 
         self.revision += 1
         self.ignored_commands = ignored_commands
         self.boring_patterns = boring_patterns
+        self.success_return_codes = success_return_codes
 
     def discard(self, event) -> bool:
         if event.command in self.ignored_commands:
