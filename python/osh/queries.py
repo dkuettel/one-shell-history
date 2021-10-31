@@ -120,7 +120,9 @@ class UniqueCommandsQuery:
                 command=event.command,
                 occurrence_count=1,
                 known_exit_count=0 if event.exit_code is None else 1,
-                failed_exit_count=0 if event.exit_code in {0, None} else 1,
+                failed_exit_count=0
+                if event.exit_code in (self.event_filter.success_return_codes | {None})
+                else 1,
                 folders=Counter({event.folder}),
                 most_recent_folder=event.folder,
             )
@@ -133,7 +135,7 @@ class UniqueCommandsQuery:
             u.occurrence_count += 1
             if event.exit_code is not None:
                 u.known_exit_count += 1
-                if event.exit_code != 0:
+                if event.exit_code not in self.event_filter.success_return_codes:
                     u.failed_exit_count += 1
             u.folders.update({event.folder})
 
