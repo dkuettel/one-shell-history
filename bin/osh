@@ -7,6 +7,7 @@ cd $base
 venv=$base/.venv
 if [[ ! -d $venv ]]; then
     echo "cannot find virtualenv at $venv" >&2
+    exit 1
 fi
 
 path=($venv/bin $path)

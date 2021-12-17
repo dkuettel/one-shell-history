@@ -19,6 +19,7 @@ if systemctl --user stop osh.service; then
     echo 'stopped old osh service'
 fi
 
+mkdir -p ~/.config/systemd/user
 export base=${0:a:h}
 cat $base/osh.service \
     | envsubst \
