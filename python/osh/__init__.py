@@ -132,6 +132,7 @@ class Statistics:
             failure_count=event_count - successful_event_count,
         )
 
+    # TODO we can remove here and other places many of the json (de)serialization
     def to_json_dict(self):
         jd = asdict(self)
         if jd["earliest"] is not None:

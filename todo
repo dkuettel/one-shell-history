@@ -1,4 +1,39 @@
 
+next:
+! uh i'm using the dev branch to run it, need to change it (again) to be able to dev and use
+    - have a submodule and do it the right way on the config side?
+    - plus make it easy with a subshell to test things
+    - also should then work out with bringing it to the staging instance
+o merge to main if it makes sense before playing around with other features here
+    - make things main instead of master to be modern?
+- no more verbose about rpc in the log file? especially for systemd not so much needed, right?
+    - if things are good, no message
+    - for failures messages
+    - maybe once in a while a summary (added xyz in the last 1h?)
+- agg search or reverse search for current folder instead of current session
+    - easy to find something project relevant
+    - generally a way to filter also based on folder? if not here but know what it was
+- in osh cli py file, global config variable still needed, still need to declare? for reading only no
+- ctrl-r should be backward search
+    - that's how people use it from before
+    - and ctrl-e could be the aggregation
+    - find a better way to make ctrl-r the default and still support new stuff
+    - always show in the prompt what it is
+- ctrl-p uses osh, but not arrow-up, that is harder to map?
+    - speed good enough? sometimes feels bumpy, could still do it "locally"
+    - but "locally" means code needs to be done for every shell
+- smart reuse: use selected command, but translate paths to work for where you are now
+    - since we know the original path it was executed in
+- readme should mention posh - powered by osh
+- what is really slow?
+    - ctrl-e is slow even though that requires no aggregation
+    - did some improvements, still valid?
+- complete/search files/paths from history?
+    - sometimes cd to complicated folder cant be searched because we hide cd
+    - (but we could go to non-ignored search)
+    - generally parse and get most-used files and paths?
+
+
 cleanliness:
 - should event-filters.yaml have a new name? config? because it has more than that now
     - or we split it up into different files?
