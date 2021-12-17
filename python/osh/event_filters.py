@@ -24,7 +24,7 @@ def maybe_create_event_filter_config_file(path: Path):
         return
     path.write_text(
         r"""format: osh-event-filters-v1
-success_return_codes: [0]
+success-return-codes: [0]
 ignore-commands: # list commands you dont want to find in your search results (exact string matches)
   - top
 ignore-patterns: # list command patterns you dont want to find in your search results (python regular expressions)
