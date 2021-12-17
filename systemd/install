@@ -15,8 +15,11 @@ if [[ $USER == root ]]; then
     exit 1
 fi
 
-export base=${0:a:h}
+if systemctl --user stop osh.service; then
+    echo 'stopped old osh service'
+fi
 
+export base=${0:a:h}
 cat $base/osh.service \
     | envsubst \
     | tee ~/.config/systemd/user/osh.service
