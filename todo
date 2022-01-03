@@ -24,13 +24,14 @@ x uh i'm using the dev branch to run it, need to change it (again) to be able to
         x but not yet nicely because syncthing is not setup
         x anyway try and see how it reacts in this case, then delete, make syncthing, try again
         x ultimately copy the zsh into archive there as well (a bit of duplicates probably)
-- probably really require osh in the path, makes things easier?
+x probably really require osh in the path, makes things easier?
 x merge to main if it makes sense before playing around with other features here
     x make things main instead of master to be modern?
-- no more verbose about rpc in the log file? especially for systemd not so much needed, right?
-    - if things are good, no message
-    - for failures messages
-    - maybe once in a while a summary (added xyz in the last 1h?)
+x no more verbose about rpc in the log file? especially for systemd not so much needed, right?
+    x if things are good, no message
+    x for failures messages
+    x maybe once in a while a summary (added xyz in the last 1h?), nah not really
+    x but just a catch all to log when we exit, for whatever reason
 - agg search or reverse search for current folder instead of current session
     - easy to find something project relevant
     - generally a way to filter also based on folder? if not here but know what it was
