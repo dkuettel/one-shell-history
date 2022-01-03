@@ -1,11 +1,32 @@
 
 next:
-! uh i'm using the dev branch to run it, need to change it (again) to be able to dev and use
-    - have a submodule and do it the right way on the config side?
-    - plus make it easy with a subshell to test things
-    - also should then work out with bringing it to the staging instance
-o merge to main if it makes sense before playing around with other features here
-    - make things main instead of master to be modern?
+x uh i'm using the dev branch to run it, need to change it (again) to be able to dev and use
+    x have a submodule and do it the right way on the config side?
+        x noticed that if you didnt run setup, and no env there, it will still try and not fail early, but then fail because old python version
+        x setup also sets up systemd, but does it handle well if there was another one before (potentially at a different location?)
+    x plus make it easy with a subshell to test things
+        x maybe source instead of subshell makes it easier? make sure to remove old hooks if any
+        x indeed just source a test.zsh, it overwrites previous settings and makes sure
+            x that we use bin/osh from here
+            x point it to another socket
+                x make same osh folder locally, expect for a new fresh local link to an osh file
+                x so history is full, but nothing is added by us now
+            x and a current server is started there
+                x start the server in a terminal interactively so that we can also have breakpoints, not systemd here
+            x even if the original stuff is running, that should be fine, the history is then double, but valid
+        x or how to easily test things?
+        x subshell that bends configuration so that it uses a locally started service
+        x but symlink include full archive to have much data
+        x and a debug.osh for just this session
+        x install as service osh-debug or run in separate tmux pane?
+        x plus an easy way to then publish it for me? pull on submodule, restart, and push new submodule head, a script for that?
+    x also should then work out with bringing it to the staging instance
+        x but not yet nicely because syncthing is not setup
+        x anyway try and see how it reacts in this case, then delete, make syncthing, try again
+        x ultimately copy the zsh into archive there as well (a bit of duplicates probably)
+- probably really require osh in the path, makes things easier?
+x merge to main if it makes sense before playing around with other features here
+    x make things main instead of master to be modern?
 - no more verbose about rpc in the log file? especially for systemd not so much needed, right?
     - if things are good, no message
     - for failures messages
@@ -32,6 +53,9 @@ o merge to main if it makes sense before playing around with other features here
     - sometimes cd to complicated folder cant be searched because we hide cd
     - (but we could go to non-ignored search)
     - generally parse and get most-used files and paths?
+- what about knowing about aliases, search also the expanded version?
+- is zsh/setup.zsh a good name? it only connects, doesnt setup or install, what do others call themselves?
+- I dont know what happens when we ctrl-z into background, does it think the command ended, what hooks are called?
 
 
 cleanliness:
