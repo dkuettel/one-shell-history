@@ -412,7 +412,7 @@ def stats():
             ]
         )
         print(
-            f"  Sir, that's {'an' if epic[0] in 'aeiou' else 'a'} {epic} {s.active_day_average_event_count} decisions per day when on active duty."
+            f"  Sir, that's {'an' if epic[0] in 'aeiou' else 'a'} [3m{epic}[0m {s.active_day_average_event_count} decisions per day when on active duty."
         )
         print()
         print(f"  Only {s.failure_count:,} of your efforts have met with failure.")

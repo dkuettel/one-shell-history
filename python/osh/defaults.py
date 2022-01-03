@@ -1,6 +1,7 @@
+import os
 from pathlib import Path
 
-dot = Path("~/.osh").expanduser()
+dot = Path(os.environ.get("OSH_HOME", "~/.osh")).expanduser()
 
 # the below are all relative to dot
 # or whatever the user chose as a base path
