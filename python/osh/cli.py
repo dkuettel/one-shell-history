@@ -425,21 +425,27 @@ def stats():
 
 @cli.command()
 def run_server():
-    history = get_history_direct()
-    # TODO note in systemd we are piped and by default it buffers a lot, so we dont see messages
-    # anyway use a proper logger, then not an issue? how does logger and systemd go together?
-    print("start server", flush=True)
-    rpc.run_server(defaults.dot / defaults.socket, history)
-    print("server exits", flush=True)
+    import osh.logging as logger
+
+    try:
+        logger.info(f"open direct history from {defaults.dot}")
+        history = get_history_direct()
+        logger.info("start server")
+        rpc.run_server(defaults.dot / defaults.socket, history)
+    except:
+        logger.info("server failed")
+        raise
+    finally:
+        logger.info("server exits")
 
 
 @cli.command()
 def is_server_alive():
     try:
         history = get_history_proxy()
-        print(f"Server on {defaults.socket} is alive.", flush=True)
+        print(f"Server on {defaults.socket} is alive.")
     except:
-        print(f"Server on {defaults.socket} is not alive.", flush=True)
+        print(f"Server on {defaults.socket} is not alive.")
         sys.exit(1)
 
 

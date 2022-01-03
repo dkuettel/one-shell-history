@@ -7,6 +7,8 @@ from itertools import islice
 from pathlib import Path
 from typing import Any, Callable
 
+import osh.logging as logger
+
 # TODO not sure if those exception are still used, or useful
 
 
@@ -115,16 +117,14 @@ def run_server(socket_path: Path, server: Any, notify_systemd: bool = True):
             # TODO not sure what is the best place to have a reasonable guarantee
             if notify_systemd:
                 if os.system("systemd-notify --ready") != 0:
-                    print("warning: systemd-notify failed")
+                    logger.warning("systemd-notify failed")
+
+            logger.info(f"rpc listening on {socket_path}")
 
             while True:
-                print(f"rpc listening on {socket_path}")
                 stream = Stream.from_socket(socket.accept()[0])
                 try:
                     name, args, kwargs = stream.read()
-                    print(
-                        f"rpc calling '{name}' with {len(args)}+{len(kwargs)} arguments"
-                    )
                     if name == "Who is it?":
                         stream.write("osh.rpc")
                         continue
@@ -145,7 +145,8 @@ def run_server(socket_path: Path, server: Any, notify_systemd: bool = True):
                         stream.write((None, False, result))
                 except (ConnectionError, TimeoutError, sockets.timeout) as e:
                     # TODO documentation says sockets.timeout is an alias for TimeoutError, but it doesnt work when I dont use both
-                    print(f"rpc call {name} failed with {e}")
+                    # I think newer pythons fixed that, 3.10 or so?
+                    logger.error(f"rpc call {name} failed with {e}")
                     try:
                         stream.write(e, False, None)
                     except:
