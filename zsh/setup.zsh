@@ -5,7 +5,7 @@
 # not sure, still nice to let the user decide
 # but then would also be nice to say it needs to be available some way, we dont discover it?
 # but then we might not use the one of this script, but another one, a bit messy
-__osh_path=$(realpath ${0:a:h}/../bin/osh)
+__osh_path=$(realpath ${0:A:h}/../bin/osh)
 
 function __osh {
     $__osh_path $@
