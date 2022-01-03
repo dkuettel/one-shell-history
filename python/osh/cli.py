@@ -434,5 +434,15 @@ def run_server():
 
 
 @cli.command()
+def is_server_alive():
+    try:
+        history = get_history_proxy()
+        print(f"Server on {defaults.socket} is alive.", flush=True)
+    except:
+        print(f"Server on {defaults.socket} is not alive.", flush=True)
+        sys.exit(1)
+
+
+@cli.command()
 def stop_server():
     get_history_proxy().exit()
