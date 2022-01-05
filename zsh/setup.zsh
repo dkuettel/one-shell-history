@@ -47,7 +47,7 @@ add-zsh-hook zshaddhistory __osh_before
 add-zsh-hook precmd __osh_after
 
 function __osh_search {
-    BUFFER=$(__osh search --query=$BUFFER)
+    BUFFER=$(__osh search --query=$BUFFER --session-id=$__osh_session_id --session-start=$__osh_session_start)
     CURSOR=$#BUFFER
     zle reset-prompt
 }
@@ -56,17 +56,6 @@ zle -N __osh_search
 bindkey '^r' __osh_search
 bindkey -M vicmd '^r' __osh_search
 bindkey -M viins '^r' __osh_search
-
-function __osh_search_backwards {
-    BUFFER=$(__osh search-backwards --query=$BUFFER --session --session-id=$__osh_session_id --session-start=$__osh_session_start)
-    CURSOR=$#BUFFER
-    zle reset-prompt
-}
-
-zle -N __osh_search_backwards
-bindkey '^e' __osh_search_backwards
-bindkey -M vicmd '^e' __osh_search_backwards
-bindkey -M viins '^e' __osh_search_backwards
 
 function __osh_previous {
     __osh_prefix_timestamp=${__osh_prefix_timestamp-$(date '+%s.%N')}
