@@ -22,9 +22,11 @@ class UnexpectedKeys(Error):
 
 def fzf(entries, /, **kwargs) -> Result:
 
+    kwargs = {key: value for key, value in kwargs.items() if value is not None}
+
     args = ["fzf"] + [
         f"--{key.replace('_','-')}"
-        if value == True
+        if value in {False, True}
         else f"--{key.replace('_','-')}={str(value)}"
         for key, value in kwargs.items()
     ]
@@ -65,18 +67,18 @@ def fzf(entries, /, **kwargs) -> Result:
         else:
             raise Exception(f"unknown return code {p.returncode} from fzf")
 
-        if "print0" in kwargs:
+        if kwargs.get("print0", False):
             outputs = p.stdout.read().decode("utf-8").split("\0")[:-1]
         else:
             outputs = p.stdout.read().decode("utf-8").split("\n")[:-1]
 
         result = Result()
-        if "print_query" in kwargs:
-            result.query = outputs.pop(0)
-        if "expect" in kwargs:
-            result.key = outputs.pop(0)
         if has_match:
             result.selection = outputs.pop()
+        if "expect" in kwargs:
+            result.key = outputs.pop()
+        if kwargs.get("print_query", False):
+            result.query = outputs.pop()
         assert len(outputs) == 0, outputs
 
     return result
