@@ -36,7 +36,7 @@ x no more verbose about rpc in the log file? especially for systemd not so much 
     - easy to find something project relevant
     - generally a way to filter also based on folder? if not here but know what it was
 - in osh cli py file, global config variable still needed, still need to declare? for reading only no
-o ctrl-r should be backward search
+x ctrl-r should be backward search
     x ctrl-r cycles: backward global, backward session, aggregated filtered, aggregated unfiltered
     x can we go directly with ctrl-1 and so on to a desired one? or tab? or letters? numbers might only work with alt-.
     x but ultimately have everything mappable for users to decide
@@ -50,8 +50,10 @@ o ctrl-r should be backward search
     x always show in the prompt what it is
     x maybe use headers as well for the search list?
     x need to keep same layout, otherwise tab/shift-tab is jumpy
-    o I dont seem to get the results of the testing session, even though they are visible in local.osh, is that one not scanned?
-        - ahh true that was by design, local.osh only defines where to add, it's not sourced, rethink if that is nice
+    x I dont seem to get the results of the testing session, even though they are visible in local.osh, is that one not scanned?
+        x ahh true that was by design, local.osh only defines where to add, it's not sourced, rethink if that is nice
+        x let's keep the default of symlinking into ./active
+        x but also consider local.osh a source, and be robust to duplicate files there
 - ctrl-p uses osh, but not arrow-up, that is harder to map?
     - speed good enough? sometimes feels bumpy, could still do it "locally"
     - but "locally" means code needs to be done for every shell
