@@ -8,7 +8,7 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 from osh.history import Event
 from osh.osh_files import (
@@ -60,8 +60,9 @@ class ArchivedSources:
 
 
 class ActiveSources:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, files: Optional[List[Path]] = None):
         self.path = path
+        self.files = files or []
         self.revision = 0
         self.events = []
         self.signature = set()
@@ -76,7 +77,7 @@ class ActiveSources:
             return
         self.last_check = now
 
-        signature = set(self.path.glob("*.osh"))
+        signature = set(self.path.glob("*.osh")) | set(self.files)
         assert all(not f.is_symlink() for f in signature)
 
         if signature == self.signature:

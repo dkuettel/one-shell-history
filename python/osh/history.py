@@ -69,7 +69,10 @@ class History:
             path / defaults.archive,
             ["**/*.zsh_history"],
         )
-        self.active = ActiveSources(path / defaults.active)
+        self.active = ActiveSources(
+            path / defaults.active,
+            files=[path / defaults.local],
+        )
         self.revision = 0
         self.events = []
         self.signature = (
