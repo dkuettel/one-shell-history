@@ -36,11 +36,22 @@ x no more verbose about rpc in the log file? especially for systemd not so much 
     - easy to find something project relevant
     - generally a way to filter also based on folder? if not here but know what it was
 - in osh cli py file, global config variable still needed, still need to declare? for reading only no
-- ctrl-r should be backward search
-    - that's how people use it from before
-    - and ctrl-e could be the aggregation
-    - find a better way to make ctrl-r the default and still support new stuff
-    - always show in the prompt what it is
+o ctrl-r should be backward search
+    x ctrl-r cycles: backward global, backward session, aggregated filtered, aggregated unfiltered
+    x can we go directly with ctrl-1 and so on to a desired one? or tab? or letters? numbers might only work with alt-.
+    x but ultimately have everything mappable for users to decide
+    x a generic search with type and cycle on tab and shift-tab? not sure how much is shared, except session not-session
+        x but the generic needs all context info
+        x could that be easier with python 3.10?
+    x that's how people use it from before
+    x and ctrl-e could be the aggregation
+    x or everything is ctrl-r, but you switch modes insides, make principled and easy approach for the navigation abstraction
+    x find a better way to make ctrl-r the default and still support new stuff
+    x always show in the prompt what it is
+    x maybe use headers as well for the search list?
+    x need to keep same layout, otherwise tab/shift-tab is jumpy
+    o I dont seem to get the results of the testing session, even though they are visible in local.osh, is that one not scanned?
+        - ahh true that was by design, local.osh only defines where to add, it's not sourced, rethink if that is nice
 - ctrl-p uses osh, but not arrow-up, that is harder to map?
     - speed good enough? sometimes feels bumpy, could still do it "locally"
     - but "locally" means code needs to be done for every shell
@@ -62,6 +73,12 @@ x no more verbose about rpc in the log file? especially for systemd not so much 
 cleanliness:
 - should event-filters.yaml have a new name? config? because it has more than that now
     - or we split it up into different files?
+
+
+far out:
+- could we stream only the simple index to fzf
+    - and then inside that process we have a fifo or so for the preview command to fetch the meta data?
+    - no more difficult parsing, maybe faster, because we dont have to stream all the data yet, only what's needed
 
 
 ctrl-p and ctrl-n:
