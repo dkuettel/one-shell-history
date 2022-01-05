@@ -6,6 +6,7 @@ import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Optional, Tuple
 
 import click
 
@@ -107,14 +108,14 @@ def format_aggregated_events(events):
         yield f"{index} --- {fzf_info} --- {fzf_folders1} --- {fzf_folders2} --- {fzf_command}"
 
 
-@cli.command()
-@click.option("--query", default="")
-@click.option("--filter-failed/--no-filter-failed", default=True)
-@click.option("--filter-ignored/--no-filter-ignored", default=True)
-@click.pass_context
-def search(ctx, query, filter_failed, filter_ignored):
-
-    history = get_history()
+def search_aggregated(
+    history,
+    query: str = "",
+    filter_failed: bool = True,
+    filter_ignored: bool = True,
+    expect: tuple[str, ...] = (),
+    header: Optional[str] = None,
+) -> Tuple[str, str, str]:
 
     events = []
 
@@ -129,20 +130,20 @@ def search(ctx, query, filter_failed, filter_ignored):
 
     formatted = format_aggregated_events(gen_events())
 
+    all_expect = expect + ("enter", "ctrl-c", "esc")
     result = fzf(
         formatted,
         query=query,
+        print_query=True,
         delimiter=" --- ",
         with_nth="5..",  # what to display (and search)
         height="70%",
         min_height="10",
-        layout="reverse",
-        prompt="agg> " if filter_ignored else "all> ",
         preview_window="down:10:wrap",
         preview="echo {2}; echo {3}; echo {4}; echo; echo {5..}",
-        print_query=True,
-        expect="enter,ctrl-c,esc,ctrl-x,ctrl-r",
+        expect=",".join(all_expect),
         tiebreak="index",
+        header=header,
         # TODO --read0 and we could have newlines in the data? also then --print0?
         # lets see how it looks with newlines, could be convenient
         # not just useful for command that have new lines (which we need to escape now)
@@ -150,70 +151,37 @@ def search(ctx, query, filter_failed, filter_ignored):
     )
     del formatted  # this lets the osh service know that we can stop streaming results
 
-    if result.key == "enter":
-        if result.selection is None:
-            print()
-        else:
-            index = int(result.selection.split(" --- ", maxsplit=1)[0])
-            event = events[index]
-            print(event.command)
-
+    assert result.key in all_expect
+    if result.key == "enter" and result.selection is None:
+        selection = result.query
+    elif result.key == "enter" and result.selection is not None:
+        index = int(result.selection.split(" --- ", maxsplit=1)[0])
+        event = events[index]
+        selection = event.command
     elif result.key in {"ctrl-c", "esc"}:
-        print(query)
-
-    elif result.key == "ctrl-x":
-        # TODO just as a POC loading here, ultimately probably cached or something, and locked
-        if result.selection is None:
-            ctx.invoke(search, query=result.query or "")
-        else:
-            index = int(result.selection.split(" --- ", maxsplit=1)[0])
-            event = events[index]
-            # TODO currently not working
-            search_config = SearchConfig()
-            search_config.add_ignored_command(event.command)
-            ctx.invoke(search, query=result.query or "")
-
-    elif result.key == "ctrl-r":
-        # switch between filter ignore and show all
-        ctx.invoke(
-            search,
-            query=result.query or "",
-            filter_failed=not filter_ignored,
-            filter_ignored=not filter_ignored,
-        )
-
+        selection = result.query
     else:
-        assert False, result.key
+        selection = None
+    # TODO took away ctrl-x to add to ignore
 
-    # TODO other options
-    # execute-*, reload
-    # but we could also just tell osh, and then redo, an outer-loop reload
-    # or if osh is globally available, then just much easier pipe? if command has unique identifiers
-    # but we might lose functionality
+    return selection, result.query, result.key if result.key in expect else None
 
 
-@cli.command()
-@click.option("--query", default="")
-@click.option("--session/--global", default=True)
-@click.option("--session-id", default=None)
-@click.option("--session-start", type=float, default=None)
-@click.pass_context
-def search_backwards(ctx, query, session, session_id, session_start):
-
-    history = get_history()
-
-    session = session and (session_id is not None)
-
-    # TODO note we dont yet pass that info, the zsh glue code needs to record the start of the session for this
-    if session_start is not None:
-        session_start = datetime.fromtimestamp(session_start, tz=timezone.utc)
+def search_backwards(
+    history,
+    query: str = "",
+    session_id: Optional[str] = None,
+    session_start: Optional[datetime] = None,
+    expect: Tuple[str, ...] = (),
+    header: Optional[str] = None,
+) -> Tuple[str, str, str]:
 
     events = history.search_backwards(
-        session_id=session_id if session else None,
-        # session_start=session_start if session else None,
+        session_id=session_id,
         session_start=session_start,
     )
 
+    # TODO from outside?
     now = datetime.now(tz=timezone.utc)
     event_by_index = []
 
@@ -234,42 +202,124 @@ def search_backwards(ctx, query, session, session_id, session_start):
 
             yield f"{index} --- {fzf_info} --- {index+1:#2d}# {fzf_ago:>4s} ago --- {fzf_command}"
 
+    all_expect = expect + ("enter", "ctrl-c", "esc")
     result = fzf(
         generate(),
         query=query,
+        print_query=True,
         delimiter=" --- ",
         with_nth="3..",  # what to display (and search)
         nth="2..",  # what to search in the displayed part
         height="70%",
         min_height="10",
-        layout="default",
-        prompt="session> " if session else "global> ",
         preview_window="down:10:wrap",
         preview="echo {2}; echo {4..}",
         tiebreak="index",
-        expect="enter,ctrl-c,esc,ctrl-e",
+        expect=",".join(all_expect),
+        header=header,
+        # TODO make a prompt? header good enough to spot the mode?
     )
+    # TODO make this with a context to be more clear
     del events  # this lets the osh service know that we can stop streaming results
 
-    if result.key == "enter":
-        if result.selection is None:
-            print(query)
-        else:
-            index = int(result.selection.split(" --- ", maxsplit=1)[0])
-            event = event_by_index[index]
-            print(event.command)
+    assert result.key in all_expect
+    if result.key == "enter" and result.selection is None:
+        selection = result.query
+    elif result.key == "enter" and result.selection is not None:
+        index = int(result.selection.split(" --- ", maxsplit=1)[0])
+        event = event_by_index[index]
+        selection = event.command
     elif result.key in {"ctrl-c", "esc"}:
-        print(query)
-    elif result.key == "ctrl-e":
-        # switch between per-session and global
-        ctx.invoke(
-            search_backwards,
-            query=result.query or "",
-            session=not session,
-            session_id=session_id,
-        )
+        selection = result.query
     else:
-        assert False, result.key
+        selection = None
+
+    return selection, result.query, result.key if result.key in expect else None
+
+
+@cli.command()
+@click.option(
+    "--modes",
+    "--mode",
+    default="backwards,backwards-session,aggregated-filtered,aggregated-all",
+)
+@click.option("--query", default="")
+@click.option("--session-id", default=None)
+@click.option("--session-start", type=float, default=None)
+def search(modes, query, session_id, session_start):
+
+    modes = modes.split(",")
+
+    if session_start is not None:
+        session_start = datetime.fromtimestamp(session_start, tz=timezone.utc)
+
+    def is_possible(m):
+        if m == "backwards-session":
+            return session_id is not None
+        return True
+
+    modes = [m for m in modes if is_possible(m)]
+
+    if len(modes) == 0:
+        modes = ["backwards"]
+    mode_index = 0
+
+    expect = ("tab", "shift-tab")
+
+    history = get_history()
+
+    while True:
+        mode = modes[mode_index]
+        # active mode is marked with inverted colors
+        header = " ".join(f"[7m{m}[0m" if m == mode else m for m in modes)
+
+        if mode == "backwards":
+            selection, query, key = search_backwards(
+                history,
+                query,
+                expect=expect,
+                header=header,
+            )
+        elif mode == "backwards-session":
+            selection, query, key = search_backwards(
+                history,
+                query,
+                session_id,
+                session_start,
+                expect=expect,
+                header=header,
+            )
+        elif mode == "aggregated-filtered":
+            selection, query, key = search_aggregated(
+                history,
+                query,
+                True,
+                True,
+                expect=expect,
+                header=header,
+            )
+        elif mode == "aggregated-all":
+            selection, query, key = search_aggregated(
+                history,
+                query,
+                False,
+                False,
+                expect=expect,
+                header=header,
+            )
+        else:
+            assert False, mode
+
+        if selection is not None:
+            print(selection)
+            return
+
+        if key == "tab":
+            mode_index = (mode_index + 1) % len(modes)
+        elif key == "shift-tab":
+            mode_index = (mode_index - 1) % len(modes)
+        else:
+            assert False, key
 
 
 @cli.command()
