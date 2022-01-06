@@ -71,7 +71,7 @@ class History:
         )
         self.active = ActiveSources(
             path / defaults.active,
-            files=[path / defaults.local],
+            local_source=path / defaults.local,
         )
         self.revision = 0
         self.events = []

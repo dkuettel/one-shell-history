@@ -60,9 +60,9 @@ class ArchivedSources:
 
 
 class ActiveSources:
-    def __init__(self, path: Path, files: Optional[List[Path]] = None):
+    def __init__(self, path: Path, local_source: Optional[Path] = None):
         self.path = path
-        self.files = files or []
+        self.local_source = local_source
         self.revision = 0
         self.events = []
         self.signature = set()
@@ -77,7 +77,9 @@ class ActiveSources:
             return
         self.last_check = now
 
-        signature = set(self.path.glob("*.osh")) | set(self.files)
+        signature = set(self.path.glob("*.osh"))
+        if self.local_source is not None:
+            signature |= {self.local_source.resolve()}
         assert all(not f.is_symlink() for f in signature)
 
         if signature == self.signature:
