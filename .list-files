@@ -1,13 +1,9 @@
 #!/bin/zsh
 set -eu -o pipefail
 
-find \
-    python \
-    \( \
-        -name '*.py' \
-    \)
+prune=(
+    -type d -name '.?*'  # all dot-folders
+    -or -name '__pycache__'
+)
 
-find . -maxdepth 1 -type f
-find systemd -type f
-find zsh -type f
-find bin -type f
+find . \( $prune \) -prune -or \( -type f -and -print \)
