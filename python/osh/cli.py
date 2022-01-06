@@ -500,9 +500,9 @@ def run_server():
 def is_server_alive():
     try:
         history = get_history_proxy()
-        print(f"Server on {defaults.socket} is alive.")
+        print(f"Server on {defaults.dot/defaults.socket} is alive.")
     except:
-        print(f"Server on {defaults.socket} is not alive.")
+        print(f"Server on {defaults.dot/defaults.socket} is not alive.")
         sys.exit(1)
 
 
