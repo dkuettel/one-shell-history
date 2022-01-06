@@ -30,7 +30,7 @@ tmux set-option -p -t $pane remain-on-exit on  # race condition, would be better
 
 until OSH_HOME=$osh_home $base/bin/osh is-server-alive; do sleep 1s; done
 
-OSH_TESTING=$base OSH_HOME=$osh_home zsh
+path=($base/bin $path) OSH_TESTING=$base OSH_HOME=$osh_home zsh
 
 OSH_HOME=$osh_home $base/bin/osh stop-server
 while OSH_HOME=$osh_home $base/bin/osh is-server-alive; do sleep 1s; done
