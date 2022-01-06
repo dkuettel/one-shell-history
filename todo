@@ -77,11 +77,11 @@ o I dont know what happens when we ctrl-z into background, does it think the com
     - that seems to be code 148, do we want to filter them differently?
     - also fg then is a command
     - the alternative would be to wrap it, but that seems nasty
-- say only once per session that server is not reachable?
-    - at least on adding, after all it works, just "worse"
-    - in interactive searches we can give a warning in the header or so everytime
-    - just so people know why it's slow, if it is
-    - adding slowness is not actually noticed really, because it's forked, that's why one message is enough
+x say only once per session that server is not reachable?
+    x at least on adding, after all it works, just "worse"
+    x in interactive searches we can give a warning in the header or so everytime
+    x just so people know why it's slow, if it is
+    x adding slowness is not actually noticed really, because it's forked, that's why one message is enough
 
 
 cleanliness:
