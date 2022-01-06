@@ -54,9 +54,10 @@ x ctrl-r should be backward search
         x ahh true that was by design, local.osh only defines where to add, it's not sourced, rethink if that is nice
         x let's keep the default of symlinking into ./active
         x but also consider local.osh a source, and be robust to duplicate files there
-- ctrl-p uses osh, but not arrow-up, that is harder to map?
-    - speed good enough? sometimes feels bumpy, could still do it "locally"
-    - but "locally" means code needs to be done for every shell
+o ctrl-p uses osh, but not arrow-up, that is harder to map?
+    x speed good enough? sometimes feels bumpy, could still do it "locally"
+    x but "locally" means code needs to be done for every shell
+    - is there a way to map ctrl-p to reverse search in session? kinda close to the familiar approach
 - smart reuse: use selected command, but translate paths to work for where you are now
     - since we know the original path it was executed in
 - readme should mention posh - powered by osh
@@ -68,8 +69,19 @@ x ctrl-r should be backward search
     - (but we could go to non-ignored search)
     - generally parse and get most-used files and paths?
 - what about knowing about aliases, search also the expanded version?
-- is zsh/setup.zsh a good name? it only connects, doesnt setup or install, what do others call themselves?
-- I dont know what happens when we ctrl-z into background, does it think the command ended, what hooks are called?
+x is zsh/setup.zsh a good name? it only connects, doesnt setup or install, what do others call themselves?
+    x zsh/osh.zsh?
+    x or assuming there will be more shells
+    x shells/zsh, and then shells/bash and so on
+o I dont know what happens when we ctrl-z into background, does it think the command ended, what hooks are called?
+    - that seems to be code 148, do we want to filter them differently?
+    - also fg then is a command
+    - the alternative would be to wrap it, but that seems nasty
+- say only once per session that server is not reachable?
+    - at least on adding, after all it works, just "worse"
+    - in interactive searches we can give a warning in the header or so everytime
+    - just so people know why it's slow, if it is
+    - adding slowness is not actually noticed really, because it's forked, that's why one message is enough
 
 
 cleanliness:
