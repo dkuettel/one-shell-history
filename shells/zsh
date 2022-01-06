@@ -1,11 +1,14 @@
-# source this (eg, in zshrc) to add one-shell-history functionality
 
-# TODO we dont require it in the path, up to the user if he wants to call 'osh stats' and the like
-# on the other hand, we need it ready here anyway, so why not just make it available? difference of shell function vs script?
-# not sure, still nice to let the user decide
-# but then would also be nice to say it needs to be available some way, we dont discover it?
-# but then we might not use the one of this script, but another one, a bit messy
+# source this in, eg, your .zshrc, to add one-shell-history functionality
+
 __osh_path=$(realpath ${0:A:h}/../bin/osh)
+
+# warn if osh is not in the path
+if [[ $(realpath =osh) != $__osh_path ]]; then
+    echo "Currently, $__osh_path is not in your path." >&2
+    which osh >/dev/null && echo "But $(realpath =osh) is." >&2
+fi
+
 
 function __osh {
     $__osh_path $@
