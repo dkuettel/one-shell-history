@@ -275,10 +275,19 @@ def search(modes, query, session_id, session_start):
 
     history = get_history()
 
+    if get_history == get_history_proxy_or_direct and type(history) is not rpc.Proxy:
+        header_warning = (
+            f"Warning: Using slower direct mode, cannot access osh service.\n"
+        )
+    else:
+        header_warning = ""
+
     while True:
         mode = modes[mode_index]
         # active mode is marked with inverted colors
-        header = " ".join(f"[7m{m}[0m" if m == mode else m for m in modes)
+        header = header_warning + " ".join(
+            f"[7m{m}[0m" if m == mode else m for m in modes
+        )
 
         if mode == "backwards":
             selection, query, key = search_backwards(
