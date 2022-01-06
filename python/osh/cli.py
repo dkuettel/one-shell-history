@@ -16,6 +16,7 @@ from osh.history import Event
 from osh.rpc import NoServerException
 from osh.utils import seconds_to_slang, str_mark_trailing_spaces
 
+_warn_on_missing_service = True
 _direct = None
 _proxy = None
 
@@ -49,10 +50,11 @@ def get_history_proxy_or_direct():
             _proxy = rpc.Proxy(defaults.dot / defaults.socket)
             _proxy.is_alive()
         except Exception as e:
-            print(
-                f"Warning: Using direct mode, cannot access osh service @{_proxy._path.resolve()}, {e}.",
-                file=sys.stderr,
-            )
+            if _warn_on_missing_service:
+                print(
+                    f"Warning: Using slower direct mode, cannot access osh service @{_proxy._path.resolve()}.\nCause: {e}.",
+                    file=sys.stderr,
+                )
             _proxy = e
 
     if not isinstance(_proxy, Exception):
@@ -66,14 +68,19 @@ def get_history():
 
 
 @click.group()
-@click.option(
-    "--use-service/--no-use-service",
-    "-s/-d",
-    default=bool(os.environ.get("__osh_use_service", True)),
-)
-def cli(use_service):
-    global get_history
-    get_history = get_history_proxy_or_direct if use_service else get_history_direct
+@click.option("--use-service/--no-use-service", default=True)
+@click.option("--allow-direct/--no-allow-direct", default=True)
+@click.option("--warn-on-missing-service/--no-warn-on-missing-service", default=True)
+def cli(use_service, allow_direct, warn_on_missing_service):
+    global _warn_on_missing_service, get_history
+    _warn_on_missing_service = warn_on_missing_service
+    if use_service:
+        if allow_direct:
+            get_history = get_history_proxy_or_direct
+        else:
+            get_history = get_history_proxy
+    else:
+        get_history = get_history_direct
 
 
 def format_aggregated_events(events):
