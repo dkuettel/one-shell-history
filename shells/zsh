@@ -2,12 +2,15 @@
 # source this in, eg, your .zshrc, to add one-shell-history functionality
 
 
-__osh=$(realpath ${0:A:h}/../bin/osh)
+__osh_path=$(realpath ${0:A:h}/../bin/osh)
 # warn if osh is not in the path
-if [[ $(realpath =osh) != $__osh ]]; then
-    echo "Currently, $__osh is not in your path." >&2
+if [[ $(realpath =osh) != $__osh_path ]]; then
+    echo "Currently, $__osh_path is not in your path." >&2
     which osh >/dev/null && echo "But $(realpath =osh) is." >&2
 fi
+function __osh {
+    $__osh_path --no-warn-on-missing-service $@
+}
 
 
 autoload -U add-zsh-hook
@@ -15,6 +18,7 @@ autoload -U add-zsh-hook
 
 __osh_session_id=$(uuidgen)
 __osh_session_start=$(date '+%s.%N')
+__osh_checked_service=no
 
 
 function __osh_before {
@@ -36,7 +40,13 @@ function __osh_after {
             --machine "$(hostname)"
             --session $__osh_session_id
         )
-        $__osh append-event $__osh_current_command &!
+        if [[ $__osh_checked_service == no ]]; then
+            if ! __osh is-server-alive >/dev/null; then
+                echo '\n\n[7mOsh service is not accessible, running in slower direct mode. There is only one warning per shell session.[0m\n' >&2
+            fi
+            __osh_checked_service=yes
+        fi
+        __osh append-event $__osh_current_command &!
         unset __osh_current_command
     fi
     unset __osh_prefix_timestamp
@@ -47,7 +57,7 @@ add-zsh-hook precmd __osh_after
 
 
 function __osh_search {
-    BUFFER=$($__osh search --query=$BUFFER --session-id=$__osh_session_id --session-start=$__osh_session_start)
+    BUFFER=$(__osh search --query=$BUFFER --session-id=$__osh_session_id --session-start=$__osh_session_start)
     CURSOR=$#BUFFER
     zle reset-prompt
 }
@@ -61,7 +71,7 @@ function __osh_previous {
     __osh_prefix_timestamp=${__osh_prefix_timestamp-$(date '+%s.%N')}
     __osh_prefix=${__osh_prefix-$BUFFER}
     # NOTE --ignore=$BUFFER would skip consecutive duplicates, sounds good, but not typically intuitive
-    if result=$($__osh previous-event --timestamp=$__osh_prefix_timestamp --prefix=$__osh_prefix --session-id=$__osh_session_id --session-start=$__osh_session_start); then
+    if result=$(__osh previous-event --timestamp=$__osh_prefix_timestamp --prefix=$__osh_prefix --session-id=$__osh_session_id --session-start=$__osh_session_start); then
         __osh_prefix_timestamp=$result[1,21]
         BUFFER=$result[23,-1]
         CURSOR=$#BUFFER
@@ -78,7 +88,7 @@ function __osh_next {
     __osh_prefix_timestamp=${__osh_prefix_timestamp-$(date '+%s.%N')}
     __osh_prefix=${__osh_prefix-$BUFFER}
     # NOTE --ignore=$BUFFER would skip consecutive duplicates, sounds good, but not typically intuitive
-    if result=$($__osh next-event --timestamp=$__osh_prefix_timestamp --prefix=$__osh_prefix --session-id=$__osh_session_id --session-start=$__osh_session_start); then
+    if result=$(__osh next-event --timestamp=$__osh_prefix_timestamp --prefix=$__osh_prefix --session-id=$__osh_session_id --session-start=$__osh_session_start); then
         __osh_prefix_timestamp=$result[1,21]
         BUFFER=$result[23,-1]
         CURSOR=$#BUFFER
