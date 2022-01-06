@@ -508,4 +508,13 @@ def is_server_alive():
 
 @cli.command()
 def stop_server():
-    get_history_proxy().exit()
+    try:
+        get_history_proxy().exit()
+        print(f"Server on {defaults.dot/defaults.socket} has been stopped")
+    except:
+        print(
+            f"Server on {defaults.dot/defaults.socket} cannot be accessed.",
+            file=sys.stderr,
+        )
+        print("Server has not been stopped", file=sys.stderr)
+        sys.exit(1)
