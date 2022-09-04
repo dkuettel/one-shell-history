@@ -8,8 +8,8 @@ base=${0:a:h}
 cd $base
 
 sudo apt install -y fzf
-if ! dpkg --compare-versions $(fzf --version) ge 0.20.0; then
-    echo 'your fzf version is older than 0.20.0' >&2
+if ! dpkg --compare-versions $(fzf --version | cut -d ' ' -f 1) ge 0.20.0; then
+    echo 'The fzf version appears to be older than 0.20.0.' >&2
     exit 1
 fi
 
