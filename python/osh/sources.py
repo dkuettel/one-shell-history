@@ -79,8 +79,8 @@ class ActiveSources:
 
         signature = set(self.path.glob("*.osh"))
         if self.local_source is not None:
-            signature |= {self.local_source.resolve()}
-        assert all(not f.is_symlink() for f in signature)
+            signature |= {self.local_source}
+        signature = {p.resolve() for p in signature}
 
         if signature == self.signature:
             try:
