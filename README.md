@@ -7,9 +7,9 @@
     - pipenv
     - fzf
     - python 3.8.2
-3) install virtual environment for python using pipenv, the repo folder execute
+3) DEPRECATED, USE PIP-TOOLS: install virtual environment for python using pipenv, the repo folder execute
    > PIPENV_VENV_IN_PROJECT=1 pipenv install
-   note: this should create a folder `.env` in the repo folder (not somewhere else)
+   note: this should create a folder `.venv` in the repo folder (not somewhere else)
 4) install the one-shell-service in systemd
    it will be installed as a user service only for the current user
    (it will run as that user, and only manage the shell history for that user, no root rights)
