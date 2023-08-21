@@ -496,6 +496,7 @@ def run_server():
     try:
         logger.info(f"open direct history from {defaults.dot}")
         history = get_history_direct()
+        history.source.refresh()
         logger.info("start server")
         rpc.run_server(defaults.dot / defaults.socket, history)
     except:
