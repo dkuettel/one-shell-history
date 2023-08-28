@@ -25,6 +25,7 @@ cat $base/osh.service \
     | envsubst \
     | tee ~/.config/systemd/user/osh.service
 
+# TODO see again dropbox and kmonad, enable with absolute path might just be fine too?
 systemctl --user daemon-reload
 systemctl --user enable osh.service
 systemctl --user restart osh.service || true

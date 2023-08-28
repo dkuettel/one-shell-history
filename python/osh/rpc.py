@@ -134,6 +134,7 @@ def run_server(socket_path: Path, server: Any, notify_systemd: bool = True):
                     if name == "exit":
                         stream.write(True)
                         break
+                    # TODO ok was a bit stupid to have name in the same namespace as the special stuff above
                     target = getattr(server, name)
                     result = target(*args, **kwargs)
                     if inspect.isgenerator(result):
