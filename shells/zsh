@@ -1,4 +1,8 @@
 
+# TODO some speed impact on shell startup
+# probably check all $() stuff, replace with built-in if possible (like date to $EPOCHREALTIME or so)
+# or $(uuidgen), just delay to actual command? there delay doesnt mattter
+
 # source this in, eg, your .zshrc, to add one-shell-history functionality
 
 
