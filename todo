@@ -82,6 +82,11 @@ x say only once per session that server is not reachable?
     x in interactive searches we can give a warning in the header or so everytime
     x just so people know why it's slow, if it is
     x adding slowness is not actually noticed really, because it's forked, that's why one message is enough
+o make aggregated-filtered just aggregated, the default one should be the short name
+- checking man systemd.service again, I think we can just go with type=simple service, so nothing at all
+    - the notify doesnt give much benefit, their recommendation is to use simple
+    - just the shutdown should remain synchronous, to be sure data is saved?
+    - though currently that's not really useful, but at least have it cleanup the command socket?
 
 
 cleanliness:
