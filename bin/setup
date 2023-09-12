@@ -1,0 +1,27 @@
+#!/bin/zsh
+set -eux -o pipefail
+
+# setup, idempotent, run as user, not root (no sudo)
+
+base=${0:a:h:h}
+
+sudo apt install -y attr fzf
+
+if ! dpkg --compare-versions $(fzf --version | cut -d ' ' -f 1) ge 0.20.0; then
+    echo 'The fzf version appears to be older than 0.20.0.' >&2
+    exit 1
+fi
+
+(
+    cd $base
+    if [[ ! -e .venv/bin/python3.10 ]]; then
+        mkdir -p .venv
+        attr -s com.dropbox.ignored -V 1 .venv
+        python3.10 -m venv --clear --upgrade-deps .venv
+    fi
+    .venv/bin/pip install --upgrade pip pip-tools
+    .venv/bin/pip-sync
+)
+
+# TODO
+# systemd/install
