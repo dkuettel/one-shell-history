@@ -72,7 +72,6 @@ class OshFileReader:
         self.last_line = None
 
     def read_events(self) -> Iterable[Event]:
-
         file = self.file.resolve()
         stat = file.stat()
 
@@ -104,13 +103,11 @@ class OshFileReader:
         return nothing()
 
     def _generate(self):
-
         # NOTE in incremental read that might not be the right state
         # (when self.last_tell jumps somewhere)
         file_format = "osh-history-v1"
 
         with self.last_file.open("rt") as file:
-
             file.seek(self.last_tell)
             if self.last_line is not None:
                 if self.last_line != file.readline():
@@ -127,7 +124,6 @@ class OshFileReader:
                     yield line
 
             for line in full_lines():
-
                 line = json.loads(line)
 
                 file_format = line.pop("format", file_format)

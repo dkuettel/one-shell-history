@@ -77,7 +77,6 @@ class Proxy:
 
 
 def run_server(socket_path: Path, server: Any, notify_systemd: bool = True):
-
     assert not hasattr(server, "is_alive")
     assert not hasattr(server, "exit")
 
@@ -86,7 +85,6 @@ def run_server(socket_path: Path, server: Any, notify_systemd: bool = True):
             family=sockets.AF_UNIX,
             type=sockets.SOCK_STREAM,
         ) as socket:
-
             socket.settimeout(None)
 
             try:

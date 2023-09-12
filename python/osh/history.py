@@ -56,7 +56,6 @@ class Event:
 
 class History:
     def __init__(self, path: Path):
-
         # TODO not so nice
         from osh.sources import ActiveSources, ArchivedSources
 

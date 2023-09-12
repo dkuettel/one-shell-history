@@ -64,7 +64,6 @@ class UniqueCommandsQuery:
         self.filter_revision = None
 
     def generate_results(self, filter_failed_at: Optional[float] = None):
-
         self.refresh()
 
         uniques = self.uniques.values()
@@ -79,7 +78,6 @@ class UniqueCommandsQuery:
         yield from sorted(uniques, key=lambda u: -u.occurrence_count)
 
     def refresh(self):
-
         self.source.refresh()
         self.event_filter.refresh()
 
@@ -108,7 +106,6 @@ class UniqueCommandsQuery:
         self.filter_revision = self.event_filter.revision
 
     def update(self, event):
-
         if self.event_filter.discard(event):
             return
 
@@ -207,7 +204,6 @@ def query_next_event(
 
 
 def test():
-
     source = History(Path("histories"))
     event_filter = EventFilter(Path("~/.one-shell-history/search.json").expanduser())
     query = UniqueCommandsQuery(source, event_filter)

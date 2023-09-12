@@ -58,6 +58,7 @@ def profile_lines(funcs):
     with Path("lines.out").open("wt") as f:
         profiler.print_stats(stream=f, output_unit=1)
 
+
 def profile_pp():
     assert False, "not finished"
 

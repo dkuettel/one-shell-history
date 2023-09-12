@@ -14,7 +14,6 @@ event_pattern = re.compile(r"^: (?P<timestamp>\d+):(?P<duration>\d+);(?P<command
 
 
 def read_zsh_file(file: Path):
-
     # TODO i'm not sure if all zsh history are the format as below, or does it depend on zsh settings?
     # maybe check what it looks like on a fresh system
     # and/or see that we fail if not as expected

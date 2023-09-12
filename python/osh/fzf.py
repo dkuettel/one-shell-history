@@ -21,7 +21,6 @@ class UnexpectedKeys(Error):
 
 
 def fzf(entries, /, **kwargs) -> Result:
-
     kwargs = {key: value for key, value in kwargs.items() if value is not None}
 
     args = ["fzf"] + [
@@ -36,7 +35,6 @@ def fzf(entries, /, **kwargs) -> Result:
         stdin=S.PIPE,
         stdout=S.PIPE,
     ) as p:
-
         entries = iter(entries)
         for entry in entries:
             if p.poll() is not None:

@@ -32,7 +32,6 @@ class ArchivedSources:
         self.min_delay = 10
 
     def refresh(self):
-
         now = time.time()
         if now - self.last_check < self.min_delay:
             return
@@ -71,7 +70,6 @@ class ActiveSources:
         self.min_delay = 1
 
     def refresh(self):
-
         now = time.time()
         if now - self.last_check < self.min_delay:
             return

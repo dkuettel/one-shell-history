@@ -13,5 +13,6 @@ def info(message):
 def warning(message):
     print("[warning] " + message, flush=True, file=sys.stderr)
 
+
 def error(message):
     print("[error] " + message, flush=True, file=sys.stderr)

@@ -43,7 +43,6 @@ def locked_file(file: Path, wait: Optional[float] = None, forever: bool = False)
         yield
 
     finally:
-
         try:
             os.unlink(lfile)
         except:

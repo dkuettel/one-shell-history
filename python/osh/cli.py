@@ -84,11 +84,9 @@ def cli(use_service, allow_direct, warn_on_missing_service):
 
 
 def format_aggregated_events(events):
-
     now = datetime.now(tz=timezone.utc)
 
     for index, event in enumerate(events):
-
         # TODO this is also a bit slow
         fzf_ago = seconds_to_slang((now - event.most_recent_timestamp).total_seconds())
 
@@ -123,7 +121,6 @@ def search_aggregated(
     expect: tuple[str, ...] = (),
     header: Optional[str] = None,
 ) -> Tuple[str, str, str]:
-
     events = []
 
     def gen_events():
@@ -182,7 +179,6 @@ def search_backwards(
     expect: Tuple[str, ...] = (),
     header: Optional[str] = None,
 ) -> Tuple[str, str, str]:
-
     events = history.search_backwards(
         session_id=session_id,
         session_start=session_start,
@@ -194,7 +190,6 @@ def search_backwards(
 
     def generate():
         for index, event in enumerate(events):
-
             event_by_index.append(event)
 
             fzf_ago = seconds_to_slang((now - event.timestamp).total_seconds())
@@ -254,7 +249,6 @@ def search_backwards(
 @click.option("--session-id", default=None)
 @click.option("--session-start", type=float, default=None)
 def search(modes, query, session_id, session_start):
-
     modes = modes.split(",")
 
     if session_start is not None:
@@ -345,7 +339,6 @@ def search(modes, query, session_id, session_start):
 @click.option("--session-id", type=str, default=None)
 @click.option("--session-start", type=float, default=None)
 def previous_event(timestamp, prefix, ignore, session_id, session_start):
-
     tolerance = 1e-8
     timestamp = datetime.fromtimestamp(timestamp - tolerance, tz=timezone.utc)
 
@@ -370,7 +363,6 @@ def previous_event(timestamp, prefix, ignore, session_id, session_start):
 @click.option("--session-id", type=str, default=None)
 @click.option("--session-start", type=float, default=None)
 def next_event(timestamp, prefix, ignore, session_id, session_start):
-
     tolerance = 1e-8
     timestamp = datetime.fromtimestamp(timestamp + tolerance, tz=timezone.utc)
 
@@ -405,7 +397,6 @@ def append_event(
     machine,
     session,
 ):
-
     history = get_history()
 
     starttime = datetime.fromtimestamp(starttime, tz=timezone.utc)
