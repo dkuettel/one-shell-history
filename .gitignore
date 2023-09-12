@@ -1,3 +1,2 @@
-/python/**/__pycache__/
 /Session.vim
-/.osh-test
+__pycache__
