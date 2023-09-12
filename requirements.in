@@ -1,9 +1,9 @@
-#line_profiler  # doesnt work anymore when I went from python3.9 to 3.10
 black
 click
 gitpython
 ipython
 isort
+line_profiler
 pprofile
 pyinstrument
 pyprof2calltree
