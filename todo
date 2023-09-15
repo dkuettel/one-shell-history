@@ -1,5 +1,10 @@
 
 next:
+- maybe fzf is easier to use if we start fzf
+    - and fzf starts another python process that streams?
+    - if we do one-shot loading, that might be way easier
+    - because we just make a component that streams the history
+    - and we make something that selects, done
 x uh i'm using the dev branch to run it, need to change it (again) to be able to dev and use
     x have a submodule and do it the right way on the config side?
         x noticed that if you didnt run setup, and no env there, it will still try and not fail early, but then fail because old python version
