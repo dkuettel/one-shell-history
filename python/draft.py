@@ -113,11 +113,6 @@ def main():
     # NOTE it's actually better not to use python -u here
     # also we need to not fail when fzf exits before we finish "broken pipe", probably
 
-    # TODO hm ok I get 206k entries with the production version
-    # but here I only get 168k, something is missing
-    # ah there is another one "osh_legacy" ... convert anyway?
-    # overall making archive into one easy loadable thing would be nice in the end
-
 
 if __name__ == "__main__":
     main()
