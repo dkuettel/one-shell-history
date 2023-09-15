@@ -519,3 +519,122 @@ def stop_server():
         )
         print("Server has not been stopped", file=sys.stderr)
         sys.exit(1)
+
+
+@cli.command()
+def time():
+    from pathlib import Path
+
+    from osh.sources import OshFileReader
+
+    r = OshFileReader(Path("./data.osh"))
+    print(len(list(r.read_events())))
+
+
+@cli.command()
+def time2():
+    from pathlib import Path
+
+    print(len(Path("./data.osh").read_text()))
+
+
+@cli.command()
+def time3():
+    import json
+    from pathlib import Path
+
+    print(len([json.loads(i) for i in Path("./data.osh").read_text().splitlines()]))
+
+
+@cli.command()
+def time4():
+    from pathlib import Path
+
+    import orjson
+
+    # faster than stdlib
+    # https://github.com/ijl/orjson
+
+    print(len([orjson.loads(i) for i in Path("./data.osh").read_text().splitlines()]))
+
+
+@cli.command()
+def time5():
+    from pathlib import Path
+
+    import msgspec
+
+    class Event(msgspec.Struct):
+        timestamp: str
+        command: str
+
+    class Entry(msgspec.Struct):
+        event: Event
+
+    # https://jcristharif.com/msgspec/
+    # even faster, but still a bit bad that we need to do it line by line?
+    # plus can it be made to work with the current format? does it support unions?
+
+    print(
+        len(
+            [
+                msgspec.json.decode(i, type=Entry)
+                for i in Path("./data.osh").read_text().splitlines()
+            ]
+        )
+    )
+
+
+@cli.command()
+def time6():
+    from pathlib import Path
+
+    import msgspec
+
+    class Event(msgspec.Struct):
+        timestamp: str
+        command: str
+
+    class Entry(msgspec.Struct):
+        event: Event
+
+    # when it's actually a list thing, it's even faster again
+    # we could probably make that happen with some ops? but diff is not too big
+
+    print(
+        len(
+            msgspec.json.decode(Path("./listed-data.osh").read_text(), type=list[Entry])
+        )
+    )
+
+
+@cli.command()
+def time7():
+    from pathlib import Path
+
+    import msgspec
+
+    class Event(msgspec.Struct):
+        timestamp: str
+        command: str
+
+    class Entry(msgspec.Struct):
+        event: Event
+
+    # awesome, as good as a listed data
+    # but the more you actually extract the slower it gets
+    # (data not given by the spec is ignored)
+    # maybe see https://jcristharif.com/msgspec/perf-tips.html
+    # (could also use MessagePack format? but appending might be more difficult?)
+
+    dec = msgspec.json.Decoder(type=Entry)
+    print(len(dec.decode_lines(Path("./data.osh").read_text())))
+
+
+@cli.command()
+def profile():
+    from osh.profile import profile_std
+
+    with profile_std():
+        history = Osh()
+        history.source.refresh()
