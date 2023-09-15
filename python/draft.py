@@ -76,8 +76,36 @@ def load_zsh():
     return events
 
 
+def read_osh_legacy_file(file: Path, skip_imported: bool = True):
+    from osh.history import Event as OshEvent
+
+    # TODO we dont like expanduser
+    file = file.expanduser()
+    # TODO we could use the faster msgspec lib, but we will probably convert this
+    data = json.loads(file.read_text())
+
+    # NOTE the legacy (pre-release) data contains events:
+    # 1) imported from zsh -> usually skip
+    # 2) osh events with time resolution in seconds -> usually see it from timestamp
+    # 3) osh events with time resolution in microseconds -> usually see it from timestamp
+
+    # TODO Event.from_json_dict will go away, then need to do it here explicitely for the future
+    events = [OshEvent.from_json_dict(event) for event in data]
+
+    if skip_imported:
+        events = [e for e in events if e.session is not None]
+
+    return [Event(e.timestamp, e.command) for e in events]
+
+
+def load_legacy():
+    sources = Path("test-data").rglob("*.osh_legacy")
+    events = [event for source in sources for event in read_osh_legacy_file(source)]
+    return events
+
+
 def main():
-    events = load_osh() + load_zsh()
+    events = load_osh() + load_zsh() + load_legacy()
     # TODO we could assume that parts are already sorted, that could make it faster
     events = sorted(events, key=lambda e: e.timestamp)
     for e in events:
