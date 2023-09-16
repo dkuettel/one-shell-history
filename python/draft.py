@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 import msgspec
+from typer import Typer
 
 
 class Event(msgspec.Struct):
@@ -19,8 +20,8 @@ class Entry(msgspec.Struct):
     event: Optional[Event] = None
 
 
-def load_osh():
-    sources = Path("test-data").rglob("*.osh")
+def load_osh(base: Path):
+    sources = base.rglob("*.osh")
     decoder = msgspec.json.Decoder(type=Entry)
     events = [
         i.event
@@ -70,8 +71,8 @@ def read_zsh_file(file: Path):
     return events
 
 
-def load_zsh():
-    sources = Path("test-data").rglob("*.zsh_history")
+def load_zsh(base: Path):
+    sources = base.rglob("*.zsh_history")
     events = [event for source in sources for event in read_zsh_file(source)]
     return events
 
@@ -98,14 +99,22 @@ def read_osh_legacy_file(file: Path, skip_imported: bool = True):
     return [Event(e.timestamp, e.command) for e in events]
 
 
-def load_legacy():
-    sources = Path("test-data").rglob("*.osh_legacy")
+def load_legacy(base: Path):
+    sources = base.rglob("*.osh_legacy")
     events = [event for source in sources for event in read_osh_legacy_file(source)]
     return events
 
 
-def main():
-    events = load_osh() + load_zsh() + load_legacy()
+# NOTE didnt seem to add timings
+app = Typer()
+
+
+@app.command()
+def simple():
+    # base = Path("test-data")
+    base = Path("test-large")
+    # TODO eventually try threads or processes per file? not per file type
+    events = load_osh(base) + load_zsh(base) + load_legacy(base)
     # TODO we could assume that parts are already sorted, that could make it faster
     events = sorted(events, key=lambda e: e.timestamp)
     for e in events:
@@ -114,5 +123,22 @@ def main():
     # also we need to not fail when fzf exits before we finish "broken pipe", probably
 
 
+@app.command()
+def frames():
+    import pandas
+
+    base = Path("test-large")
+    [source] = list(base.rglob("*.osh"))
+    df = pandas.read_json(source, lines=True)
+    print(df)
+
+    # NOTE this seems definitely slower
+    # but for certain things dataframes are nice, aggregation
+    # so we might still use it, but not for loading?
+    # unless we make the format better for pandas?
+    # speed was actually faster when loading with msgspec and then passing to dataframes
+    # but need to properly unpack into columns
+
+
 if __name__ == "__main__":
-    main()
+    app()
