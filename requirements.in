@@ -4,6 +4,8 @@ gitpython
 ipython
 isort
 line_profiler
+msgspec
+pandas
 pprofile
 pyinstrument
 pyprof2calltree
@@ -11,3 +13,4 @@ pyyaml
 snakeviz
 tabulate
 tuna
+typer
