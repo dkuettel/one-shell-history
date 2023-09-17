@@ -2,6 +2,8 @@ import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+from subprocess import PIPE, Popen, run
+from threading import Thread
 from typing import Optional
 
 import msgspec
@@ -105,22 +107,16 @@ def load_legacy(base: Path):
     return events
 
 
-# NOTE didnt seem to add timings
-app = Typer()
-
-
-@app.command()
-def simple():
-    # base = Path("test-data")
-    base = Path("test-large")
+def load_simple(base: Path):
     # TODO eventually try threads or processes per file? not per file type
     events = load_osh(base) + load_zsh(base) + load_legacy(base)
     # TODO we could assume that parts are already sorted, that could make it faster
     events = sorted(events, key=lambda e: e.timestamp)
-    for e in events:
-        print(e.command)
-    # NOTE it's actually better not to use python -u here
-    # also we need to not fail when fzf exits before we finish "broken pipe", probably
+    return events
+
+
+# NOTE didnt seem to add timings
+app = Typer()
 
 
 @app.command()
@@ -138,6 +134,46 @@ def frames():
     # unless we make the format better for pandas?
     # speed was actually faster when loading with msgspec and then passing to dataframes
     # but need to properly unpack into columns
+
+
+@app.command()
+def list_backwards():
+    def g(out):
+        base = Path("test-data")
+        events = reversed(load_simple(base))
+        for i, e in enumerate(events):
+            # TODO one thing that might be needlessly expensive is that we produce all data
+            # for aggregation or preview, even though most of that is actually never gonna be used
+            # \ to \\ works for preview, but not for list view, tell print not to respect any escapes?
+            # if we run things from inside python we could actually connect back to the running process
+            # and get that raw information, also makes --preview='print -r -- {3}' easier to keep sane
+            out.write(str(i) + "\x1f" + str(e.timestamp) + "\x1f" + e.command + "\x00")
+        # NOTE it's actually better not to use python -u here
+        # also we need to not fail when fzf exits before we finish "broken pipe", probably
+        out.close()
+
+    with Popen(
+        [
+            "fzf",
+            "--read0",
+            "--delimiter=\x1f",
+            "--with-nth=2..",
+            "--preview=print -r -- {3}",
+            "--print0",
+            "--print-query",
+            "--expect=enter",
+        ],
+        text=True,
+        stdin=PIPE,
+        stdout=PIPE,
+    ) as p:
+        thread = Thread(target=g, args=(p.stdin,))
+        thread.start()
+        print(p.stdout.read(None).split("\x00"))
+        print(p.wait())
+
+    # TODO use something like
+    # python -m draft list-backwards | fzf --read0 --delimiter=$'\x1f' --with-nth=2.. --preview='print -r -- {3}'
 
 
 if __name__ == "__main__":
