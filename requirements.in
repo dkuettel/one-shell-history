@@ -10,6 +10,7 @@ pprofile
 pyinstrument
 pyprof2calltree
 pyyaml
+pyzmq
 snakeviz
 tabulate
 tuna

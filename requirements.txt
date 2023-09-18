@@ -39,7 +39,7 @@ msgspec==0.18.2
     # via -r requirements.in
 mypy-extensions==1.0.0
     # via black
-numpy==1.25.2
+numpy==1.26.0
     # via pandas
 packaging==23.1
     # via black
@@ -75,11 +75,13 @@ pytz==2023.3.post1
     # via pandas
 pyyaml==6.0.1
     # via -r requirements.in
+pyzmq==25.1.1
+    # via -r requirements.in
 six==1.16.0
     # via
     #   asttokens
     #   python-dateutil
-smmap==5.0.0
+smmap==5.0.1
     # via gitdb
 snakeviz==2.2.0
     # via -r requirements.in
@@ -99,7 +101,7 @@ tuna==0.5.11
     # via -r requirements.in
 typer==0.9.0
     # via -r requirements.in
-typing-extensions==4.7.1
+typing-extensions==4.8.0
     # via
     #   black
     #   typer
