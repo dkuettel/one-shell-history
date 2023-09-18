@@ -1,0 +1,5 @@
+#!/bin/zsh
+set -eux -o pipefail
+
+# python -m draft list-backwards | fzf --read0 --delimiter=$'\x1f' --with-nth=2.. --preview='print -r -- {3}'
+unshare -r -n python -m draft list-backwards
