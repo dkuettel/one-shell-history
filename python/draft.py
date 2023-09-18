@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -7,6 +8,7 @@ from threading import Thread
 from typing import Optional
 
 import msgspec
+import zmq
 from typer import Typer
 
 
@@ -137,28 +139,65 @@ def frames():
 
 
 @app.command()
+def get_preview(index: int):
+    context = zmq.Context()
+    socket = context.socket(zmq.REQ)
+    socket.connect("ipc://@preview")
+    socket.send(str(index).encode())
+    message = socket.recv()
+    print(message.decode())
+
+
+@app.command()
 def list_backwards():
+    events = None
+
     def g(out):
+        nonlocal events
         base = Path("test-data")
-        events = reversed(load_simple(base))
+        # TODO does that cost time? listing the reversed? make the sort reversed to start with? an in-place?
+        events = list(reversed(load_simple(base)))
+        count = len(events)
+        width = len(str(count))
         for i, e in enumerate(events):
-            # TODO one thing that might be needlessly expensive is that we produce all data
-            # for aggregation or preview, even though most of that is actually never gonna be used
-            # \ to \\ works for preview, but not for list view, tell print not to respect any escapes?
-            # if we run things from inside python we could actually connect back to the running process
-            # and get that raw information, also makes --preview='print -r -- {3}' easier to keep sane
-            out.write(str(i) + "\x1f" + str(e.timestamp) + "\x1f" + e.command + "\x00")
-        # NOTE it's actually better not to use python -u here
-        # also we need to not fail when fzf exits before we finish "broken pipe", probably
+            # TODO the full width for reverse index looks stupid
+            # TODO we also want to add the xyz ago in a very condensed manner?
+            out.write(f"{i: {width}d}" + "\x1f " + e.command + "\x00")
+        # TODO shouldnt fail on "broken pipe" or similar, when fzf exits early
         out.close()
+
+    def p():
+        context = zmq.Context()
+        socket = context.socket(zmq.REP)
+        socket.bind("ipc://@preview")
+        # TODO need to exit eventually, per message? or signal while socket.recv()?
+        while True:
+            message = socket.recv()
+            if events is None:
+                socket.send(b"... loading ...")
+                continue
+            i = int(message.decode())
+            e = events[i]
+            socket.send(f"{e.timestamp}\n{e.command}".encode())
+
+    pthread = Thread(target=p)
+    pthread.start()
+    # TODO should join on it
 
     with Popen(
         [
             "fzf",
+            "--height=70%",
+            "--min-height=10",
+            "--header=some-header",
+            # "--query=something",
+            "--tiebreak=index",
             "--read0",
             "--delimiter=\x1f",
-            "--with-nth=2..",
-            "--preview=print -r -- {3}",
+            # "--with-nth=2..",  # TODO what do display make different from what to search?
+            # TODO check nth vs with-nth again
+            "--preview-window=down:10:wrap",
+            "--preview=python -m draft get-preview {1}",
             "--print0",
             "--print-query",
             "--expect=enter",
@@ -169,11 +208,9 @@ def list_backwards():
     ) as p:
         thread = Thread(target=g, args=(p.stdin,))
         thread.start()
+        # TODO should join on it?
         print(p.stdout.read(None).split("\x00"))
         print(p.wait())
-
-    # TODO use something like
-    # python -m draft list-backwards | fzf --read0 --delimiter=$'\x1f' --with-nth=2.. --preview='print -r -- {3}'
 
 
 if __name__ == "__main__":
