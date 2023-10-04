@@ -173,16 +173,22 @@ def list_backwards():
         # TODO need to exit eventually, per message? or signal while socket.recv()?
         while True:
             message = socket.recv()
+            if message == b"exit":
+                print("exit received")
+                socket.send(b"ack")
+                break
             if events is None:
                 socket.send(b"... loading ...")
                 continue
             i = int(message.decode())
             e = events[i]
             socket.send(f"{e.timestamp}\n{e.command}".encode())
+        socket.close()
+        context.destroy()
+        print("received exit done")
 
     pthread = Thread(target=p)
     pthread.start()
-    # TODO should join on it
 
     with Popen(
         [
@@ -211,6 +217,14 @@ def list_backwards():
         # TODO should join on it?
         print(p.stdout.read(None).split("\x00"))
         print(p.wait())
+
+    # TODO stop the preview thread, need to use same context?
+    context = zmq.Context()
+    socket = context.socket(zmq.REQ)
+    socket.connect("ipc://@preview")
+    socket.send(b"exit")
+    print("exit requested")
+    socket.recv()
 
 
 if __name__ == "__main__":
