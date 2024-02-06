@@ -4,80 +4,85 @@
 #
 #    pip-compile
 #
-backcall==0.2.0
-    # via ipython
-black==21.8b0
+asttokens==2.4.1
+    # via stack-data
+black==21.12b0
     # via -r requirements.in
-click==8.0.1
+click==8.0.4
     # via
     #   -r requirements.in
     #   black
-decorator==5.1.0
+decorator==5.1.1
     # via ipython
-gitdb==4.0.7
+exceptiongroup==1.2.0
+    # via ipython
+executing==2.0.1
+    # via stack-data
+gitdb==4.0.11
     # via gitpython
 gitpython==3.1.41
     # via -r requirements.in
-ipython==7.27.0
+ipython==8.18.1
     # via
     #   -r requirements.in
     #   line-profiler
 isort==5.9.3
     # via -r requirements.in
-jedi==0.18.0
+jedi==0.19.1
     # via ipython
 line-profiler==3.3.1
     # via -r requirements.in
-matplotlib-inline==0.1.3
+matplotlib-inline==0.1.6
     # via ipython
-mypy-extensions==0.4.3
+mypy-extensions==1.0.0
     # via black
-parso==0.8.2
+parso==0.8.3
     # via jedi
-pathspec==0.9.0
+pathspec==0.12.1
     # via black
-pexpect==4.8.0
+pexpect==4.9.0
     # via ipython
-pickleshare==0.7.5
-    # via ipython
-platformdirs==2.3.0
+platformdirs==4.2.0
     # via black
 pprofile==2.1.0
     # via -r requirements.in
-prompt-toolkit==3.0.20
+prompt-toolkit==3.0.43
     # via ipython
 ptyprocess==0.7.0
     # via pexpect
-pygments==2.10.0
+pure-eval==0.2.2
+    # via stack-data
+pygments==2.17.2
     # via ipython
 pyinstrument==4.0.4
     # via -r requirements.in
 pyprof2calltree==1.4.5
     # via -r requirements.in
-pyyaml==6.0
+pyyaml==6.0.1
     # via -r requirements.in
-regex==2021.8.28
-    # via black
-smmap==4.0.0
+six==1.16.0
+    # via asttokens
+smmap==5.0.1
     # via gitdb
-snakeviz==2.1.0
+snakeviz==2.1.2
     # via -r requirements.in
-tabulate==0.8.9
+stack-data==0.6.3
+    # via ipython
+tabulate==0.8.10
     # via -r requirements.in
-tomli==1.2.1
+tomli==1.2.3
     # via black
-tornado==6.1
+tornado==6.4
     # via snakeviz
-traitlets==5.1.0
+traitlets==5.14.1
     # via
     #   ipython
     #   matplotlib-inline
-tuna==0.5.9
+tuna==0.5.11
     # via -r requirements.in
-typing-extensions==3.10.0.2
-    # via black
-wcwidth==0.2.5
+typing-extensions==4.9.0
+    # via
+    #   black
+    #   ipython
+wcwidth==0.2.13
     # via prompt-toolkit
-
-# The following packages are considered to be unsafe in a requirements file:
-# setuptools
