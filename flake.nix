@@ -22,7 +22,7 @@
       env = pkgs.buildEnv {
         name = "dev";
         paths = [
-          pkgs.python313
+          pkgs.python312
           pkgs.uv
           pkgs.ruff
           pkgs.pyright

@@ -12,6 +12,9 @@ import zmq
 from typer import Typer
 
 
+# TODO it worked without giving order? ah no we do it ourselves
+# but if we make timestamp the first, and give order, would that make it faster and more native?
+# there is order=True and frozen=True
 class Event(msgspec.Struct):
     timestamp: datetime
     command: str

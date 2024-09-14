@@ -1,0 +1,32 @@
+[project]
+name = "osh"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+   "black",
+   "click",
+   "gitpython",
+   "ipython",
+   "isort",
+   "line_profiler",
+   "msgspec", # not yet ready for python 3.13
+   "pandas",
+   "pprofile",
+   "pyinstrument",
+   "pyprof2calltree",
+   "pyyaml",
+   "pyzmq",
+   "snakeviz",
+   "tabulate",
+   "tuna",
+   "typer",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pyright]
+include = ["src"]
