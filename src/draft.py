@@ -1,23 +1,27 @@
 import json
-import os
 import re
+from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import Enum
 from pathlib import Path
-from subprocess import PIPE, Popen, run
+from subprocess import PIPE, Popen
 from threading import Thread
-from typing import Optional
+from typing import Optional, TextIO, assert_never
 
 import msgspec
 import zmq
 from typer import Typer
 
 
-# TODO it worked without giving order? ah no we do it ourselves
-# but if we make timestamp the first, and give order, would that make it faster and more native?
-# there is order=True and frozen=True
-class Event(msgspec.Struct):
+class Event(msgspec.Struct, frozen=True):
     timestamp: datetime
     command: str
+    duration: float | None = None
+    exit_code: int | None = None
+    folder: str | None = None
+    machine: str | None = None
+    session: str | None = None
 
 
 # TODO eventually we have to deal with a union, because there is more than one type of entry?
@@ -112,16 +116,90 @@ def load_legacy(base: Path):
     return events
 
 
-def load_simple(base: Path):
+class Order(Enum):
+    recent_first = True
+    oldest_first = False
+
+
+def load_simple(base: Path, order: Order) -> list[Event]:
     # TODO eventually try threads or processes per file? not per file type
     events = load_osh(base) + load_zsh(base) + load_legacy(base)
-    # TODO we could assume that parts are already sorted, that could make it faster
-    events = sorted(events, key=lambda e: e.timestamp)
+    events = sorted(events, key=lambda e: e.timestamp, reverse=order.value)
     return events
 
 
-# NOTE didnt seem to add timings
-app = Typer()
+@dataclass
+class History:
+    events: list[Event] | None
+
+    @classmethod
+    def from_empty(cls):
+        return cls(events=None)
+
+
+def write_backwards(history: History, out: TextIO):
+    base = Path("test-data")
+    history.events = load_simple(base, Order.recent_first)
+    count = len(history.events)
+    width = len(str(count))
+    try:
+        for i, e in enumerate(history.events):
+            # TODO the full width for reverse index looks stupid
+            # TODO we also want to add the xyz ago in a very condensed manner?
+            out.write(f"{i: {width}d}" + "\x1f " + e.command + "\x00")
+        out.close()
+    except BrokenPipeError:
+        pass  # NOTE thats when fzf exits before we finish
+
+
+@dataclass
+class Previews:
+    history: History
+
+    @contextmanager
+    def while_serving(self):
+        thread = Thread(target=self.serve)
+        thread.start()
+        try:
+            yield
+        finally:
+            self.send_exit()
+            thread.join()
+
+    def serve(self):
+        context = zmq.Context()
+        socket = context.socket(zmq.REP)
+        socket.bind("ipc://@preview")
+
+        while True:
+            match socket.recv():
+                case b"exit":
+                    socket.send(b"ack")
+                    break
+                case bytes() as message:
+                    if self.history.events is None:
+                        socket.send(b"... loading ...")
+                        continue
+                    index = int(message.decode())
+                    event = self.history.events[index]
+                    socket.send(f"{event.timestamp}\n{event.command}".encode())
+                case _ as never:
+                    assert_never(never)
+
+        socket.close()
+        context.destroy()
+
+    def send_exit(self):
+        context = zmq.Context()
+        socket = context.socket(zmq.REQ)
+        socket.connect("ipc://@preview")
+        socket.send(b"exit")
+        assert socket.recv() == b"ack"
+        socket.close()
+        context.destroy()
+
+
+app = Typer(pretty_exceptions_enable=False)
 
 
 @app.command()
@@ -153,81 +231,47 @@ def get_preview(index: int):
 
 @app.command()
 def list_backwards():
-    events = None
+    history = History.from_empty()
 
-    def g(out):
-        nonlocal events
-        base = Path("test-data")
-        # TODO does that cost time? listing the reversed? make the sort reversed to start with? an in-place?
-        events = list(reversed(load_simple(base)))
-        count = len(events)
-        width = len(str(count))
-        for i, e in enumerate(events):
-            # TODO the full width for reverse index looks stupid
-            # TODO we also want to add the xyz ago in a very condensed manner?
-            out.write(f"{i: {width}d}" + "\x1f " + e.command + "\x00")
-        # TODO shouldnt fail on "broken pipe" or similar, when fzf exits early
-        out.close()
+    with Previews(history).while_serving():
+        with Popen(
+            [
+                "fzf",
+                "--height=70%",
+                "--min-height=10",
+                "--header=some-header",
+                # "--query=something",
+                "--tiebreak=index",
+                "--read0",
+                "--delimiter=\x1f",
+                # "--with-nth=2..",  # TODO what do display make different from what to search?
+                # TODO check nth vs with-nth again
+                "--preview-window=down:10:wrap",
+                "--preview=python -m draft get-preview {1}",
+                "--print0",
+                "--print-query",
+                "--expect=enter",
+            ],
+            text=True,
+            stdin=PIPE,
+            stdout=PIPE,
+        ) as p:
+            assert p.stdin is not None
+            assert p.stdout is not None
 
-    def p():
-        context = zmq.Context()
-        socket = context.socket(zmq.REP)
-        socket.bind("ipc://@preview")
-        # TODO need to exit eventually, per message? or signal while socket.recv()?
-        while True:
-            message = socket.recv()
-            if message == b"exit":
-                print("exit received")
-                socket.send(b"ack")
-                break
-            if events is None:
-                socket.send(b"... loading ...")
-                continue
-            i = int(message.decode())
-            e = events[i]
-            socket.send(f"{e.timestamp}\n{e.command}".encode())
-        socket.close()
-        context.destroy()
-        print("received exit done")
+            write_thread = Thread(
+                target=write_backwards,
+                args=(
+                    history,
+                    p.stdin,
+                ),
+            )
+            write_thread.start()
 
-    pthread = Thread(target=p)
-    pthread.start()
+            print(p.stdout.read().split("\x00"))
+            print(p.wait())
 
-    with Popen(
-        [
-            "fzf",
-            "--height=70%",
-            "--min-height=10",
-            "--header=some-header",
-            # "--query=something",
-            "--tiebreak=index",
-            "--read0",
-            "--delimiter=\x1f",
-            # "--with-nth=2..",  # TODO what do display make different from what to search?
-            # TODO check nth vs with-nth again
-            "--preview-window=down:10:wrap",
-            "--preview=python -m draft get-preview {1}",
-            "--print0",
-            "--print-query",
-            "--expect=enter",
-        ],
-        text=True,
-        stdin=PIPE,
-        stdout=PIPE,
-    ) as p:
-        thread = Thread(target=g, args=(p.stdin,))
-        thread.start()
-        # TODO should join on it?
-        print(p.stdout.read(None).split("\x00"))
-        print(p.wait())
-
-    # TODO stop the preview thread, need to use same context?
-    context = zmq.Context()
-    socket = context.socket(zmq.REQ)
-    socket.connect("ipc://@preview")
-    socket.send(b"exit")
-    print("exit requested")
-    socket.recv()
+            write_thread.join()
 
 
 if __name__ == "__main__":
