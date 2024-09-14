@@ -26,6 +26,8 @@
           pkgs.uv
           pkgs.ruff
           pkgs.pyright
+          pkgs.stdenv.cc.cc.lib # for msgpack
+          pkgs.nodejs_22 # for copilot
         ];
       };
       packages.x86_64-linux.default = env;
