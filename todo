@@ -1,5 +1,7 @@
 
 next:
+- soon most of the dependencies are gone
+- switch to python 13 when msgspec is ready
 - maybe fzf is easier to use if we start fzf
     - and fzf starts another python process that streams?
     - if we do one-shot loading, that might be way easier
