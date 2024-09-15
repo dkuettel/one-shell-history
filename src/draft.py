@@ -1,4 +1,5 @@
 import json
+import pickle
 import re
 import sys
 from collections.abc import Iterator, Sequence
@@ -132,9 +133,13 @@ class Order(Enum):
 
 
 def load_history(base: Path, order: Order) -> Iterator[Event]:
-    # TODO eventually try threads or processes per file? not per file type
+    # cache = base / "cache.pickle"
+    # if cache.exists():
+    #     return pickle.loads(cache.read_bytes())
+    # TODO eventually try threads or processes per file? not per file type, and incremental for early start?
     events = load_osh_history(base)  # + load_zsh(base) + load_legacy(base)
     events = sorted(events, key=lambda e: e.timestamp, reverse=order.value)
+    # cache.write_bytes(pickle.dumps(events))
     return iter(events)
 
 
