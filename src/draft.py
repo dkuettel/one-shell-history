@@ -32,16 +32,23 @@ class Entry(msgspec.Struct):
     event: Optional[Event] = None
 
 
-def load_osh(base: Path):
+def load_osh_history(base: Path) -> Iterator[Event]:
     sources = base.rglob("*.osh")
     decoder = msgspec.json.Decoder(type=Entry)
-    events = [
-        i.event
-        for source in sources
-        for i in decoder.decode_lines(source.read_text())
-        if i.event is not None
-    ]
-    return events
+    # for source in sources:
+    #     for i in decoder.decode_lines(source.read_text()):
+    #         if i.event is not None:
+    #             yield i.event
+    # TODO not so easy to read it reverse ... unless we make a file format that supports that well? (utf8 is painful here)
+    # or we could remember what we read last time, and if the last content is still the same, we know where to continue, that should be very little
+    # (but still would not be backwards)
+    for source in sources:
+        with source.open("rt") as f:
+            for l in f:
+                if len(l) > 0:
+                    match decoder.decode(l).event:
+                        case Event() as e:
+                            yield e
 
 
 event_pattern = re.compile(r"^: (?P<timestamp>\d+):(?P<duration>\d+);(?P<command>.*)$")
@@ -124,7 +131,7 @@ class Order(Enum):
 
 def load_history(base: Path, order: Order) -> Iterator[Event]:
     # TODO eventually try threads or processes per file? not per file type
-    events = load_osh(base) + load_zsh(base) + load_legacy(base)
+    events = load_osh_history(base)  # + load_zsh(base) + load_legacy(base)
     events = sorted(events, key=lambda e: e.timestamp, reverse=order.value)
     return iter(events)
 
