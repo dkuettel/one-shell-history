@@ -12,7 +12,7 @@ from typing import Optional, TextIO, assert_never
 
 import msgspec
 import zmq
-from typer import Typer
+from typer import Abort, Exit, Typer
 
 
 class Event(msgspec.Struct, frozen=True):
@@ -344,10 +344,24 @@ def list_backwards(query: str = ""):
             )
             thread.start()
 
-            print(stdout.read().split("\x00"))
-            print(wait())
-
+            result = stdout.read().split("\x00")
+            exit_code = wait()
             thread.join()
+
+    if exit_code != 0:
+        raise Exit(exit_code)
+
+    match result:
+        case [str() as query, str() as key, str() as selection, ""]:
+            # eg, ['draft', 'enter', '5\x1f[ 1y ago] \x1ftime python -m draft > /dev/null', '']
+            match key:
+                case "enter":
+                    index = int(selection.split("\x1f", maxsplit=1)[0])
+                    print(indexed[index].command)
+                case _:
+                    raise Abort(f"fzf returned with an unexpected key: {key}")
+        case _:
+            raise Abort(f"fzf returned unexpected data: {result}")
 
 
 if __name__ == "__main__":
