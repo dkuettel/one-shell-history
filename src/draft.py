@@ -183,7 +183,7 @@ def send_indexed_history_to_fzf(events: Sequence[tuple[int, Event]], out: TextIO
 
 
 @contextmanager
-def while_serving_preview(events: list[Event]):
+def preview_server_running(events: list[Event]):
     thread = Thread(target=serve_preview, args=(events,))
     thread.start()
     try:
@@ -228,6 +228,36 @@ def send_exit_to_preview():
     context.destroy()
 
 
+@contextmanager
+def fzf_running(query: str):
+    with Popen(
+        [
+            "fzf",
+            "--height=70%",
+            "--min-height=10",
+            "--header=some-header",
+            f"--query={query}",
+            "--tiebreak=index",
+            "--read0",
+            "--delimiter=\x1f",
+            # NOTE --with-nth is applied first, then --nth is relative to that
+            "--with-nth=2..",  # what to show
+            "--nth=2..",  # what to search
+            "--preview-window=down:10:wrap",
+            "--preview=python -m draft get-preview {1}",
+            "--print0",
+            "--print-query",
+            "--expect=enter",
+        ],
+        text=True,
+        stdin=PIPE,
+        stdout=PIPE,
+    ) as p:
+        assert p.stdin is not None
+        assert p.stdout is not None
+        yield p.stdin, p.stdout, p.wait
+
+
 app = Typer(pretty_exceptions_enable=False)
 
 
@@ -263,46 +293,21 @@ def list_backwards(query: str = ""):
     events = load_history(Path("test-data"), Order.recent_first)
     events, indexed = index_history(events)
 
-    with while_serving_preview(indexed):
-        with Popen(
-            [
-                "fzf",
-                "--height=70%",
-                "--min-height=10",
-                "--header=some-header",
-                f"--query={query}",
-                "--tiebreak=index",
-                "--read0",
-                "--delimiter=\x1f",
-                # NOTE --with-nth is applied first, then --nth is relative to that
-                "--with-nth=2..",  # what to show
-                "--nth=2..",  # what to search
-                "--preview-window=down:10:wrap",
-                "--preview=python -m draft get-preview {1}",
-                "--print0",
-                "--print-query",
-                "--expect=enter",
-            ],
-            text=True,
-            stdin=PIPE,
-            stdout=PIPE,
-        ) as p:
-            assert p.stdin is not None
-            assert p.stdout is not None
-
-            write_thread = Thread(
+    with preview_server_running(indexed):
+        with fzf_running(query) as (stdin, stdout, wait):
+            thread = Thread(
                 target=send_indexed_history_to_fzf,
                 args=(
                     events,
-                    p.stdin,
+                    stdin,
                 ),
             )
-            write_thread.start()
+            thread.start()
 
-            print(p.stdout.read().split("\x00"))
-            print(p.wait())
+            print(stdout.read().split("\x00"))
+            print(wait())
 
-            write_thread.join()
+            thread.join()
 
 
 if __name__ == "__main__":
