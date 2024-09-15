@@ -18,8 +18,9 @@ from typer import Typer
 class Event(msgspec.Struct, frozen=True):
     timestamp: datetime
     command: str
+    # TODO the typing doesnt show that either all of them are missing, or none, and in the future none are missing?
     duration: float | None = None
-    exit_code: int | None = None
+    exit_code: int | None = msgspec.field(name="exit-code", default=None)
     folder: str | None = None
     machine: str | None = None
     session: str | None = None
