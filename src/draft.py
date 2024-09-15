@@ -1,5 +1,6 @@
 import json
 import re
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -121,11 +122,24 @@ class Order(Enum):
     oldest_first = False
 
 
-def load_simple(base: Path, order: Order) -> list[Event]:
+def load_history(base: Path, order: Order) -> Iterator[Event]:
     # TODO eventually try threads or processes per file? not per file type
     events = load_osh(base) + load_zsh(base) + load_legacy(base)
     events = sorted(events, key=lambda e: e.timestamp, reverse=order.value)
-    return events
+    return iter(events)
+
+
+def index_history(
+    events: Iterator[Event],
+) -> tuple[Iterator[tuple[int, Event]], list[Event]]:
+    indexed: list[Event] = []
+
+    def g() -> Iterator[tuple[int, Event]]:
+        for i, event in enumerate(events):
+            indexed.append(event)
+            yield i, event
+
+    return g(), indexed
 
 
 @dataclass
@@ -156,66 +170,62 @@ def human_ago(dt: timedelta) -> str:
     return f"{round(y)}y"
 
 
-def write_backwards(history: History, out: TextIO):
-    base = Path("test-data")
-    history.events = load_simple(base, Order.recent_first)
+def send_indexed_history_to_fzf(events: Sequence[tuple[int, Event]], out: TextIO):
     now = datetime.now(timezone.utc)
     try:
-        for i, e in enumerate(history.events):
-            ago = human_ago(now - e.timestamp)
-            cmd = e.command.replace("\n", "")
-            out.write(f"{i}\x1f[{ago: >3} ago] {cmd}\x00")
+        for i, event in events:
+            ago = human_ago(now - event.timestamp)
+            cmd = event.command.replace("\n", "")
+            out.write(f"{i}\x1f[{ago: >3} ago] \x1f{cmd}\x00")
         out.close()
     except BrokenPipeError:
         pass  # NOTE thats when fzf exits before we finish
 
 
-@dataclass
-class Previews:
-    history: History
+@contextmanager
+def while_serving_preview(events: list[Event]):
+    thread = Thread(target=serve_preview, args=(events,))
+    thread.start()
+    try:
+        yield
+    finally:
+        send_exit_to_preview()
+        thread.join()
 
-    @contextmanager
-    def while_serving(self):
-        thread = Thread(target=self.serve)
-        thread.start()
-        try:
-            yield
-        finally:
-            self.send_exit()
-            thread.join()
 
-    def serve(self):
-        context = zmq.Context()
-        socket = context.socket(zmq.REP)
-        socket.bind("ipc://@preview")
+def serve_preview(events: list[Event]):
+    context = zmq.Context()
+    socket = context.socket(zmq.REP)
+    socket.bind("ipc://@preview")
 
-        while True:
-            match socket.recv():
-                case b"exit":
-                    socket.send(b"ack")
-                    break
-                case bytes() as message:
-                    if self.history.events is None:
-                        socket.send(b"... loading ...")
-                        continue
-                    index = int(message.decode())
-                    event = self.history.events[index]
-                    # TODO time should be local time, not utc
-                    socket.send(f"{event.timestamp}\n{event.command}".encode())
-                case _ as never:
-                    assert_never(never)
+    while True:
+        match socket.recv():
+            case b"exit":
+                socket.send(b"ack")
+                break
+            case bytes() as message:
+                index = int(message.decode())
+                if index >= len(events):
+                    socket.send(b"... loading ...")
+                    continue
+                event = events[index]
+                # TODO time should be local time, not utc
+                socket.send(f"{event.timestamp}\n{event.command}".encode())
+            case _ as never:
+                assert_never(never)
 
-        socket.close()
-        context.destroy()
+    socket.close()
+    context.destroy()
 
-    def send_exit(self):
-        context = zmq.Context()
-        socket = context.socket(zmq.REQ)
-        socket.connect("ipc://@preview")
-        socket.send(b"exit")
-        assert socket.recv() == b"ack"
-        socket.close()
-        context.destroy()
+
+def send_exit_to_preview():
+    context = zmq.Context()
+    socket = context.socket(zmq.REQ)
+    socket.connect("ipc://@preview")
+    socket.send(b"exit")
+    assert socket.recv() == b"ack"
+    socket.close()
+    context.destroy()
 
 
 app = Typer(pretty_exceptions_enable=False)
@@ -249,22 +259,24 @@ def get_preview(index: int):
 
 
 @app.command()
-def list_backwards():
-    history = History.from_empty()
+def list_backwards(query: str = ""):
+    events = load_history(Path("test-data"), Order.recent_first)
+    events, indexed = index_history(events)
 
-    with Previews(history).while_serving():
+    with while_serving_preview(indexed):
         with Popen(
             [
                 "fzf",
                 "--height=70%",
                 "--min-height=10",
                 "--header=some-header",
-                # "--query=something",
+                f"--query={query}",
                 "--tiebreak=index",
                 "--read0",
                 "--delimiter=\x1f",
-                "--with-nth=2..",  # TODO what do display make different from what to search?
-                # TODO check nth vs with-nth again
+                # NOTE --with-nth is applied first, then --nth is relative to that
+                "--with-nth=2..",  # what to show
+                "--nth=2..",  # what to search
                 "--preview-window=down:10:wrap",
                 "--preview=python -m draft get-preview {1}",
                 "--print0",
@@ -279,9 +291,9 @@ def list_backwards():
             assert p.stdout is not None
 
             write_thread = Thread(
-                target=write_backwards,
+                target=send_indexed_history_to_fzf,
                 args=(
-                    history,
+                    events,
                     p.stdin,
                 ),
             )
