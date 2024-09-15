@@ -3,7 +3,7 @@ import re
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, tzinfo
 from enum import Enum
 from pathlib import Path
 from subprocess import PIPE, Popen
@@ -159,8 +159,18 @@ class History:
         return cls(events=None)
 
 
-def human_ago(dt: timedelta) -> str:
-    s = dt.total_seconds()
+def human_duration(dt: timedelta | float) -> str:
+    match dt:
+        case timedelta():
+            ms = dt.total_seconds() * 1000
+        case float() | int():
+            ms = dt * 1000
+        case _ as never:
+            assert_never(never)
+
+    if ms < 1000:
+        return f"{round(ms)}ms"
+    s = ms / 1000
     if s < 60:
         return f"{round(s)}s"
     m = s / 60
@@ -178,11 +188,11 @@ def human_ago(dt: timedelta) -> str:
     return f"{round(y)}y"
 
 
-def send_indexed_history_to_fzf(events: Sequence[tuple[int, Event]], out: TextIO):
+def send_indexed_events_to_fzf(events: Sequence[tuple[int, Event]], out: TextIO):
     now = datetime.now(timezone.utc)
     try:
         for i, event in events:
-            ago = human_ago(now - event.timestamp)
+            ago = human_duration(now - event.timestamp)
             cmd = event.command.replace("\n", "")
             out.write(f"{i}\x1f[{ago: >3} ago] \x1f{cmd}\x00")
         out.close()
@@ -206,6 +216,9 @@ def serve_preview(events: list[Event]):
     socket = context.socket(zmq.REP)
     socket.bind("ipc://@preview")
 
+    tz = datetime.now().astimezone().tzinfo
+    assert tz is not None
+
     while True:
         match socket.recv():
             case b"exit":
@@ -217,13 +230,32 @@ def serve_preview(events: list[Event]):
                     socket.send(b"... loading ...")
                     continue
                 event = events[index]
-                # TODO time should be local time, not utc
-                socket.send(f"{event.timestamp}\n{event.command}".encode())
+                socket.send(preview_from_event(event, tz).encode())
             case _ as never:
                 assert_never(never)
 
     socket.close()
     context.destroy()
+
+
+def preview_from_event(event: Event, tz: tzinfo) -> str:
+    ts = event.timestamp.astimezone(tz)
+    match event.folder, event.machine, event.exit_code, event.duration:
+        case str() as folder, str() as machine, int() as exit_code, float() as duration:
+            dt = human_duration(duration)
+            parts = [
+                f"[returned {exit_code} after {dt} on {ts}]",
+                f"[ran in {folder} on {machine}]",
+                "",
+                event.command,
+            ]
+        case _:
+            parts = [
+                f"ran on {ts}",
+                "",
+                event.command,
+            ]
+    return "\n".join(parts)
 
 
 def send_exit_to_preview():
@@ -304,7 +336,7 @@ def list_backwards(query: str = ""):
     with preview_server_running(indexed):
         with fzf_running(query) as (stdin, stdout, wait):
             thread = Thread(
-                target=send_indexed_history_to_fzf,
+                target=send_indexed_events_to_fzf,
                 args=(
                     events,
                     stdin,
