@@ -2,7 +2,7 @@ import json
 import re
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
 from subprocess import PIPE, Popen
@@ -137,16 +137,34 @@ class History:
         return cls(events=None)
 
 
+def human_ago(dt: timedelta) -> str:
+    s = dt.total_seconds()
+    if s < 60:
+        return f"{round(s)}s"
+    m = s / 60
+    if m < 60:
+        return f"{round(m)}m"
+    h = m / 60
+    if h < 24:
+        return f"{round(h)}h"
+    d = h / 24
+    if d < 7:
+        return f"{round(d)}d"
+    if d < 365:
+        return f"{round(d / 7)}w"
+    y = d / 365
+    return f"{round(y)}y"
+
+
 def write_backwards(history: History, out: TextIO):
     base = Path("test-data")
     history.events = load_simple(base, Order.recent_first)
-    count = len(history.events)
-    width = len(str(count))
+    now = datetime.now(timezone.utc)
     try:
         for i, e in enumerate(history.events):
-            # TODO the full width for reverse index looks stupid
-            # TODO we also want to add the xyz ago in a very condensed manner?
-            out.write(f"{i: {width}d}" + "\x1f " + e.command + "\x00")
+            ago = human_ago(now - e.timestamp)
+            cmd = e.command.replace("\n", "")
+            out.write(f"{i}\x1f[{ago: >3} ago] {cmd}\x00")
         out.close()
     except BrokenPipeError:
         pass  # NOTE thats when fzf exits before we finish
@@ -182,6 +200,7 @@ class Previews:
                         continue
                     index = int(message.decode())
                     event = self.history.events[index]
+                    # TODO time should be local time, not utc
                     socket.send(f"{event.timestamp}\n{event.command}".encode())
                 case _ as never:
                     assert_never(never)
@@ -244,7 +263,7 @@ def list_backwards():
                 "--tiebreak=index",
                 "--read0",
                 "--delimiter=\x1f",
-                # "--with-nth=2..",  # TODO what do display make different from what to search?
+                "--with-nth=2..",  # TODO what do display make different from what to search?
                 # TODO check nth vs with-nth again
                 "--preview-window=down:10:wrap",
                 "--preview=python -m draft get-preview {1}",
