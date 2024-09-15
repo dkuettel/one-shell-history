@@ -1,5 +1,6 @@
 import json
 import re
+import sys
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -359,9 +360,14 @@ def list_backwards(query: str = ""):
                     index = int(selection.split("\x1f", maxsplit=1)[0])
                     print(indexed[index].command)
                 case _:
-                    raise Abort(f"fzf returned with an unexpected key: {key}")
+                    print(
+                        f"fzf returned with an unexpected key: {key}",
+                        file=sys.stderr,
+                    )
+                    raise Abort()
         case _:
-            raise Abort(f"fzf returned unexpected data: {result}")
+            print(f"fzf returned unexpected data: {result}", file=sys.stderr)
+            raise Abort()
 
 
 if __name__ == "__main__":
