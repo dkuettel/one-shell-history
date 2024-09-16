@@ -5,6 +5,7 @@ set -eu -o pipefail
 # unshare -r -n python -m draft list-backwards
 
 unshare -r -n python -m draft quick
+# time unshare -r -n python -X importtime -m draft quick
 
 # args=(
 #     --height=70%

@@ -395,6 +395,14 @@ def get_preview(index: int):
 
 @app.command()
 def quick(query: str = ""):
+    # TODO just doesnt feel as snappy as when calling fzf directly ... why is that? just python startup time?
+    # can we get around it with starting fzf first in an unshare and to the rest from there? enough events for that?
+    # how to get the clean return value then?
+    # something like
+    # > start:execute(python -m draft serve &)+reload:execute(python -m draft events)
+    # ah no ... does that fork? and when we exit, in fzf, stop the server.
+    # TODO in the old version it was actually snappy, is my nix stuff slower?
+    # the old code actually waits much longer to get there, maybe it is the imports?
     with Popen(
         [
             # NOTE checked docs up to 0.55
