@@ -1,5 +1,29 @@
 #!/bin/zsh
-set -eux -o pipefail
+set -eu -o pipefail
 
 # python -m draft list-backwards | fzf --read0 --delimiter=$'\x1f' --with-nth=2.. --preview='print -r -- {3}'
-unshare -r -n python -m draft list-backwards
+# unshare -r -n python -m draft list-backwards
+
+unshare -r -n python -m draft quick
+
+# args=(
+#     --height=70%
+#     --min-height=10
+#     --header=some-header
+#     --tiebreak=index
+#     --scheme=history
+#     --read0
+#     --info=inline-right
+#     --highlight-line
+#     --delimiter=\\x1f
+#     --with-nth=2..
+#     --nth=2..
+#     --preview-window=down:10:wrap
+#     --preview='python -m draft get-preview {1}'
+#     --print0
+#     --print-query
+#     # --expect=enter,esc,ctrl-c,tab,shift-tab
+#     --bind 'start:reload(python -m draft fast)'
+#     --bind 'tab:reload(python -m draft fast --next $mode)'
+# )
+# unshare -r -n fzf $args

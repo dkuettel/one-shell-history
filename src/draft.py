@@ -1,8 +1,7 @@
 import json
-import pickle
 import re
 import sys
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
@@ -10,11 +9,14 @@ from enum import Enum
 from pathlib import Path
 from subprocess import PIPE, Popen
 from threading import Thread
-from typing import Optional, TextIO, assert_never
+from typing import Optional, assert_never
 
 import msgspec
 import zmq
 from typer import Abort, Exit, Typer
+
+# TODO maybe minimize the imports for speed
+# run the imports only in the commands, or in other files later
 
 
 class Event(msgspec.Struct, frozen=True):
@@ -156,15 +158,6 @@ def index_history(
     return g(), indexed
 
 
-@dataclass
-class History:
-    events: list[Event] | None
-
-    @classmethod
-    def from_empty(cls):
-        return cls(events=None)
-
-
 def human_duration(dt: timedelta | float) -> str:
     match dt:
         case timedelta():
@@ -194,54 +187,45 @@ def human_duration(dt: timedelta | float) -> str:
     return f"{round(y)}y"
 
 
-def send_indexed_events_to_fzf(events: Sequence[tuple[int, Event]], out: TextIO):
-    now = datetime.now(timezone.utc)
-    try:
-        for i, event in events:
-            ago = human_duration(now - event.timestamp)
-            cmd = event.command.replace("\n", "")
-            out.write(f"{i}\x1f[{ago: >3} ago] \x1f{cmd}\x00")
-        out.close()
-    except BrokenPipeError:
-        pass  # NOTE thats when fzf exits before we finish
+@dataclass(frozen=True)
+class RequestExit:
+    pass
+
+
+@dataclass(frozen=True)
+class RequestPreview:
+    index: int
+
+
+@dataclass(frozen=True)
+class RequestEvents:
+    start: int
+    count: int
+
+
+@dataclass(frozen=True)
+class ReplyAck:
+    pass
+
+
+@dataclass(frozen=True)
+class ReplyPreview:
+    content: str
+
+
+@dataclass(frozen=True)
+class ReplyEvents:
+    events: list[str]
 
 
 @contextmanager
-def preview_server_running(events: list[Event]):
-    thread = Thread(target=serve_preview, args=(events,))
-    thread.start()
-    try:
-        yield
-    finally:
-        send_exit_to_preview()
-        thread.join()
-
-
-def serve_preview(events: list[Event]):
-    context = zmq.Context()
-    socket = context.socket(zmq.REP)
-    socket.bind("ipc://@preview")
-
-    tz = datetime.now().astimezone().tzinfo
-    assert tz is not None
-
-    while True:
-        match socket.recv():
-            case b"exit":
-                socket.send(b"ack")
-                break
-            case bytes() as message:
-                index = int(message.decode())
-                if index >= len(events):
-                    socket.send(b"... loading ...")
-                    continue
-                event = events[index]
-                socket.send(preview_from_event(event, tz).encode())
-            case _ as never:
-                assert_never(never)
-
-    socket.close()
-    context.destroy()
+def request_socket():
+    with (
+        zmq.Context() as context,
+        context.socket(zmq.REQ) as socket,
+    ):
+        socket.connect("ipc://@server")
+        yield socket
 
 
 def preview_from_event(event: Event, tz: tzinfo) -> str:
@@ -278,13 +262,18 @@ def send_exit_to_preview():
 def fzf_running(query: str):
     with Popen(
         [
+            # NOTE checked docs up to 0.55
             "fzf",
             "--height=70%",
             "--min-height=10",
             "--header=some-header",
             f"--query={query}",
             "--tiebreak=index",
+            "--scheme=history",
+            # "--tac",  # TODO reversed, could we then not sort? but it means we add the most relevant last?
             "--read0",
+            "--info=inline-right",
+            "--highlight-line",
             "--delimiter=\x1f",
             # NOTE --with-nth is applied first, then --nth is relative to that
             "--with-nth=2..",  # what to show
@@ -293,7 +282,8 @@ def fzf_running(query: str):
             "--preview=python -m draft get-preview {1}",
             "--print0",
             "--print-query",
-            "--expect=enter",
+            # TODO how to manage switching modes? simple restart, or reload?
+            "--expect=enter,esc,ctrl-c,tab,shift-tab",
         ],
         text=True,
         stdin=PIPE,
@@ -302,6 +292,75 @@ def fzf_running(query: str):
         assert p.stdin is not None
         assert p.stdout is not None
         yield p.stdin, p.stdout, p.wait
+
+
+@contextmanager
+def thread(target: Callable[[], None]):
+    thread = Thread(target=target)
+    thread.start()
+    try:
+        yield
+    finally:
+        thread.join()
+
+
+@dataclass
+class Server:
+    events: list[Event]
+
+    @classmethod
+    def from_path(cls, base: Path = Path("test-data")):
+        # TODO just for testing, not incremental yet, not backgrounded
+        events = load_history(base, Order.recent_first)
+        # events, indexed = index_history(events)
+        events = list(events)
+        return cls(events)
+
+    def run(self):
+        tz = datetime.now().astimezone().tzinfo
+        assert tz is not None
+
+        with (
+            zmq.Context() as context,
+            context.socket(zmq.REP) as socket,
+        ):
+            socket.bind("ipc://@server")
+
+            while True:
+                match socket.recv_pyobj():
+                    case RequestExit():
+                        socket.send_pyobj(ReplyAck())
+                        # TODO what about the loading thread(s)? it might not be finished yet? can we interrupt it?
+                        return
+
+                    case RequestPreview(index):
+                        if index >= len(self.events):
+                            socket.send(b"... loading ...")
+                            continue
+                        event = self.events[index]
+                        socket.send_pyobj(ReplyPreview(preview_from_event(event, tz)))
+
+                    case RequestEvents(start, count):
+                        now = datetime.now(timezone.utc)
+                        socket.send_pyobj(
+                            ReplyEvents(
+                                [
+                                    fzf_entry_from_event(i, event, now)
+                                    for i, event in enumerate(
+                                        self.events[start : start + count], start=start
+                                    )
+                                ]
+                            )
+                        )
+
+                    case _ as never:
+                        assert_never(never)
+
+
+@contextmanager
+def running_server(server: Server):
+    with thread(server.run):
+        yield server
 
 
 app = Typer(pretty_exceptions_enable=False)
@@ -335,24 +394,45 @@ def get_preview(index: int):
 
 
 @app.command()
-def list_backwards(query: str = ""):
-    events = load_history(Path("test-data"), Order.recent_first)
-    events, indexed = index_history(events)
+def quick(query: str = ""):
+    with Popen(
+        [
+            # NOTE checked docs up to 0.55
+            "fzf",
+            "--height=70%",
+            "--min-height=10",
+            "--header=some-header",
+            f"--query={query}",
+            "--tiebreak=index",
+            "--scheme=history",
+            # "--tac",  # TODO reversed, could we then not sort? but it means we add the most relevant last?
+            "--read0",
+            "--info=inline-right",
+            "--highlight-line",
+            "--delimiter=\x1f",
+            # NOTE --with-nth is applied first, then --nth is relative to that
+            "--with-nth=2..",  # what to show
+            "--nth=2..",  # what to search
+            "--preview-window=down:10:wrap",
+            "--preview=python -m draft preview {1}",
+            "--print0",
+            "--print-query",
+            # TODO how to manage switching modes? simple restart, or reload?
+            "--expect=enter,esc,ctrl-c,tab,shift-tab",
+            "--bind=start:reload:python -m draft events",
+        ],
+        text=True,
+        stdout=PIPE,
+    ) as p:
+        assert p.stdout is not None
 
-    with preview_server_running(indexed):
-        with fzf_running(query) as (stdin, stdout, wait):
-            thread = Thread(
-                target=send_indexed_events_to_fzf,
-                args=(
-                    events,
-                    stdin,
-                ),
-            )
-            thread.start()
-
-            result = stdout.read().split("\x00")
-            exit_code = wait()
-            thread.join()
+        # TODO how far can we go with threads? we want to be responsive, but also need to load the data
+        # TODO make this into a nice tuple context when above is shorter/abstracted
+        server = Server.from_path()
+        with running_server(server):
+            result = p.stdout.read().split("\x00")
+            exit_code = p.wait()
+            exit()
 
     if exit_code != 0:
         raise Exit(exit_code)
@@ -362,8 +442,10 @@ def list_backwards(query: str = ""):
             # eg, ['draft', 'enter', '5\x1f[ 1y ago] \x1ftime python -m draft > /dev/null', '']
             match key:
                 case "enter":
+                    # TODO lets use unique indices, not just int for reverse search, opaque string into a full general-purpose dict?
+                    # since the main thing is in a thread here, we should have access?
                     index = int(selection.split("\x1f", maxsplit=1)[0])
-                    print(indexed[index].command)
+                    print(server.events[index].command)
                 case _:
                     print(
                         f"fzf returned with an unexpected key: {key}",
@@ -373,6 +455,56 @@ def list_backwards(query: str = ""):
         case _:
             print(f"fzf returned unexpected data: {result}", file=sys.stderr)
             raise Abort()
+
+
+@app.command()
+def serve():
+    with running_server(Server.from_path()):
+        pass
+
+
+def fzf_entry_from_event(i: int, event: Event, now: datetime) -> str:
+    ago = human_duration(now - event.timestamp)
+    cmd = event.command.replace("\n", "")
+    return f"{i}\x1f[{ago: >3} ago] \x1f{cmd}"
+
+
+@app.command()
+def exit():
+    with request_socket() as socket:
+        socket.send_pyobj(RequestExit())
+        assert socket.recv_pyobj() == ReplyAck()
+
+
+@app.command()
+def preview(index: int):
+    with request_socket() as socket:
+        socket.send_pyobj(RequestPreview(index))
+        match socket.recv_pyobj():
+            case ReplyPreview(content):
+                print(content)
+            case _ as never:
+                assert_never(never)
+
+
+@app.command()
+def events():
+    # TODO not supporting session yet, and also modes and all that, aggregation, mode state is kept by the server?
+    # query = "test"
+    # session = "2e715f13-1248-443f-ae0f-65d315ae9b18"
+    with request_socket() as socket:
+        start, batch = 0, 1000
+        while True:
+            socket.send_pyobj(RequestEvents(start, batch))
+            match socket.recv_pyobj():
+                case ReplyEvents([]):
+                    break
+                case ReplyEvents(events):
+                    for event in events:
+                        print(event, end="\x00")
+                case _ as never:
+                    assert_never(never)
+            start += batch
 
 
 if __name__ == "__main__":
