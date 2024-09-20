@@ -6,16 +6,12 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
 from enum import Enum
 from pathlib import Path
-from subprocess import PIPE, Popen
 from threading import Thread
 from typing import Optional, assert_never
 
 import msgspec
 import zmq
 from typer import Exit, Typer
-
-# TODO maybe minimize the imports for speed
-# run the imports only in the commands, or in other files later
 
 
 class Event(msgspec.Struct, frozen=True):
@@ -257,52 +253,6 @@ def preview_from_event(event: Event, tz: tzinfo) -> str:
     return "\n".join(parts)
 
 
-def send_exit_to_preview():
-    context = zmq.Context()
-    socket = context.socket(zmq.REQ)
-    socket.connect("ipc://@preview")
-    socket.send(b"exit")
-    assert socket.recv() == b"ack"
-    socket.close()
-    context.destroy()
-
-
-@contextmanager
-def fzf_running(query: str):
-    with Popen(
-        [
-            # NOTE checked docs up to 0.55
-            "fzf",
-            "--height=70%",
-            "--min-height=10",
-            "--header=some-header",
-            f"--query={query}",
-            "--tiebreak=index",
-            "--scheme=history",
-            # "--tac",  # TODO reversed, could we then not sort? but it means we add the most relevant last?
-            "--read0",
-            "--info=inline-right",
-            "--highlight-line",
-            "--delimiter=\x1f",
-            # NOTE --with-nth is applied first, then --nth is relative to that
-            "--with-nth=2..",  # what to show
-            "--nth=2..",  # what to search
-            "--preview-window=down:10:wrap",
-            "--preview=python -m draft get-preview {1}",
-            "--print0",
-            "--print-query",
-            # TODO how to manage switching modes? simple restart, or reload?
-            "--expect=enter,esc,ctrl-c,tab,shift-tab",
-        ],
-        text=True,
-        stdin=PIPE,
-        stdout=PIPE,
-    ) as p:
-        assert p.stdin is not None
-        assert p.stdout is not None
-        yield p.stdin, p.stdout, p.wait
-
-
 @contextmanager
 def thread(target: Callable[[], None]):
     thread = Thread(target=target)
@@ -363,6 +313,12 @@ def run_server(base: Path):
                     assert_never(never)
 
 
+def fzf_entry_from_event(i: int, event: Event, now: datetime) -> str:
+    ago = human_duration(now - event.timestamp)
+    cmd = event.command.replace("\n", "")
+    return f"{i}\x1f[{ago: >3} ago] \x1f{cmd}"
+
+
 app = Typer(pretty_exceptions_enable=False)
 
 
@@ -390,12 +346,6 @@ def frames():
 @app.command()
 def serve():
     run_server(Path("test-data"))
-
-
-def fzf_entry_from_event(i: int, event: Event, now: datetime) -> str:
-    ago = human_duration(now - event.timestamp)
-    cmd = event.command.replace("\n", "")
-    return f"{i}\x1f[{ago: >3} ago] \x1f{cmd}"
 
 
 @app.command()
