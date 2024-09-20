@@ -193,8 +193,18 @@ class RequestExit:
 
 
 @dataclass(frozen=True)
+class ReplyExit:
+    pass
+
+
+@dataclass(frozen=True)
 class RequestPreview:
     index: int
+
+
+@dataclass(frozen=True)
+class ReplyPreview:
+    content: str
 
 
 @dataclass(frozen=True)
@@ -204,18 +214,18 @@ class RequestEvents:
 
 
 @dataclass(frozen=True)
-class ReplyAck:
-    pass
-
-
-@dataclass(frozen=True)
-class ReplyPreview:
-    content: str
-
-
-@dataclass(frozen=True)
 class ReplyEvents:
     events: list[str]
+
+
+@dataclass(frozen=True)
+class RequestResult:
+    index: int
+
+
+@dataclass(frozen=True)
+class ReplyResult:
+    content: str
 
 
 @contextmanager
@@ -329,7 +339,7 @@ class Server:
             while True:
                 match socket.recv_pyobj():
                     case RequestExit():
-                        socket.send_pyobj(ReplyAck())
+                        socket.send_pyobj(ReplyExit())
                         # TODO what about the loading thread(s)? it might not be finished yet? can we interrupt it?
                         return
 
@@ -352,6 +362,10 @@ class Server:
                                 ]
                             )
                         )
+
+                    case RequestResult(index):
+                        event = self.events[index]
+                        socket.send_pyobj(ReplyResult(event.command))
 
                     case _ as never:
                         assert_never(never)
@@ -383,90 +397,13 @@ def frames():
     # but need to properly unpack into columns
 
 
-@app.command()
-def get_preview(index: int):
-    context = zmq.Context()
-    socket = context.socket(zmq.REQ)
-    socket.connect("ipc://@preview")
-    socket.send(str(index).encode())
-    message = socket.recv()
-    print(message.decode())
-
-
-@app.command()
-def quick(query: str = ""):
-    # TODO just doesnt feel as snappy as when calling fzf directly ... why is that? just python startup time?
-    # can we get around it with starting fzf first in an unshare and to the rest from there? enough events for that?
-    # how to get the clean return value then?
-    # something like
-    # > start:execute(python -m draft serve &)+reload:execute(python -m draft events)
-    # ah no ... does that fork? and when we exit, in fzf, stop the server.
-    # TODO in the old version it was actually snappy, is my nix stuff slower?
-    # the old code actually waits much longer to get there, maybe it is the imports?
-    with Popen(
-        [
-            # NOTE checked docs up to 0.55
-            "fzf",
-            "--height=70%",
-            "--min-height=10",
-            "--header=some-header",
-            f"--query={query}",
-            "--tiebreak=index",
-            "--scheme=history",
-            # "--tac",  # TODO reversed, could we then not sort? but it means we add the most relevant last?
-            "--read0",
-            "--info=inline-right",
-            "--highlight-line",
-            "--delimiter=\x1f",
-            # NOTE --with-nth is applied first, then --nth is relative to that
-            "--with-nth=2..",  # what to show
-            "--nth=2..",  # what to search
-            "--preview-window=down:10:wrap",
-            "--preview=python -m draft preview {1}",
-            "--print0",
-            "--print-query",
-            # TODO how to manage switching modes? simple restart, or reload?
-            "--expect=enter,esc,ctrl-c,tab,shift-tab",
-            "--bind=start:reload:python -m draft events",
-        ],
-        text=True,
-        stdout=PIPE,
-    ) as p:
-        assert p.stdout is not None
-
-        # TODO how far can we go with threads? we want to be responsive, but also need to load the data
-        # TODO make this into a nice tuple context when above is shorter/abstracted
-        server = Server.from_path()
-        with running_server(server):
-            result = p.stdout.read().split("\x00")
-            exit_code = p.wait()
-            exit()
-
-    if exit_code != 0:
-        raise Exit(exit_code)
-
-    match result:
-        case [str() as query, str() as key, str() as selection, ""]:
-            # eg, ['draft', 'enter', '5\x1f[ 1y ago] \x1ftime python -m draft > /dev/null', '']
-            match key:
-                case "enter":
-                    # TODO lets use unique indices, not just int for reverse search, opaque string into a full general-purpose dict?
-                    # since the main thing is in a thread here, we should have access?
-                    index = int(selection.split("\x1f", maxsplit=1)[0])
-                    print(server.events[index].command)
-                case _:
-                    print(
-                        f"fzf returned with an unexpected key: {key}",
-                        file=sys.stderr,
-                    )
-                    raise Abort()
-        case _:
-            print(f"fzf returned unexpected data: {result}", file=sys.stderr)
-            raise Abort()
+# TODO typer import seems to be the majority of startup time ... click is actually quite a bit faster
+# TODO consider heapq.merge?
 
 
 @app.command()
 def serve():
+    # TODO no need for a context here
     with running_server(Server.from_path()):
         pass
 
@@ -478,10 +415,26 @@ def fzf_entry_from_event(i: int, event: Event, now: datetime) -> str:
 
 
 @app.command()
-def exit():
+def exit(index: int | None = None, fail: bool = False):
     with request_socket() as socket:
+        match index:
+            case int():
+                socket.send_pyobj(RequestResult(index))
+                match socket.recv_pyobj():
+                    case ReplyResult(content):
+                        print(content)
+                    case _ as never:
+                        assert_never(never)
+            case None:
+                pass
+            case _ as never:
+                assert_never(never)
+
         socket.send_pyobj(RequestExit())
-        assert socket.recv_pyobj() == ReplyAck()
+        assert socket.recv_pyobj() == ReplyExit()
+
+    if fail:
+        raise Exit(1)
 
 
 @app.command()
@@ -496,7 +449,7 @@ def preview(index: int):
 
 
 @app.command()
-def events():
+def backwards():
     # TODO not supporting session yet, and also modes and all that, aggregation, mode state is kept by the server?
     # query = "test"
     # session = "2e715f13-1248-443f-ae0f-65d315ae9b18"
