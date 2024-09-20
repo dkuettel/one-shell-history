@@ -5,14 +5,14 @@ args=(
     --height=70%
     --min-height=10
     --header=some-header  # TODO get from server
-    # TODO --query=...
+    --query=${1:-}
     --tiebreak=index
     --scheme=history
     # TODO --tac for reverse?
     --read0
     --info=inline-right
     --highlight-line
-    --delimiter=\\x1f  # TODO is this working?
+    --delimiter=\\x1f
     --with-nth=2..
     --nth=2..
     --preview-window=down:10:wrap
