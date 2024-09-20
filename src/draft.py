@@ -1,6 +1,5 @@
 import json
 import re
-import sys
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -13,7 +12,7 @@ from typing import Optional, assert_never
 
 import msgspec
 import zmq
-from typer import Abort, Exit, Typer
+from typer import Exit, Typer
 
 # TODO maybe minimize the imports for speed
 # run the imports only in the commands, or in other files later
@@ -314,67 +313,54 @@ def thread(target: Callable[[], None]):
         thread.join()
 
 
-@dataclass
-class Server:
-    events: list[Event]
+def run_server(base: Path):
+    # TODO just for testing, not incremental yet, not backgrounded
+    events = load_history(base, Order.recent_first)
+    # events, indexed = index_history(events)
+    events = list(events)
 
-    @classmethod
-    def from_path(cls, base: Path = Path("test-data")):
-        # TODO just for testing, not incremental yet, not backgrounded
-        events = load_history(base, Order.recent_first)
-        # events, indexed = index_history(events)
-        events = list(events)
-        return cls(events)
+    tz = datetime.now().astimezone().tzinfo
+    assert tz is not None
 
-    def run(self):
-        tz = datetime.now().astimezone().tzinfo
-        assert tz is not None
+    with (
+        zmq.Context() as context,
+        context.socket(zmq.REP) as socket,
+    ):
+        socket.bind("ipc://@server")
 
-        with (
-            zmq.Context() as context,
-            context.socket(zmq.REP) as socket,
-        ):
-            socket.bind("ipc://@server")
+        while True:
+            match socket.recv_pyobj():
+                case RequestExit():
+                    socket.send_pyobj(ReplyExit())
+                    # TODO what about the loading thread(s)? it might not be finished yet? can we interrupt it?
+                    return
 
-            while True:
-                match socket.recv_pyobj():
-                    case RequestExit():
-                        socket.send_pyobj(ReplyExit())
-                        # TODO what about the loading thread(s)? it might not be finished yet? can we interrupt it?
-                        return
+                case RequestPreview(index):
+                    if index >= len(events):
+                        socket.send(b"... loading ...")
+                        continue
+                    event = events[index]
+                    socket.send_pyobj(ReplyPreview(preview_from_event(event, tz)))
 
-                    case RequestPreview(index):
-                        if index >= len(self.events):
-                            socket.send(b"... loading ...")
-                            continue
-                        event = self.events[index]
-                        socket.send_pyobj(ReplyPreview(preview_from_event(event, tz)))
-
-                    case RequestEvents(start, count):
-                        now = datetime.now(timezone.utc)
-                        socket.send_pyobj(
-                            ReplyEvents(
-                                [
-                                    fzf_entry_from_event(i, event, now)
-                                    for i, event in enumerate(
-                                        self.events[start : start + count], start=start
-                                    )
-                                ]
-                            )
+                case RequestEvents(start, count):
+                    now = datetime.now(timezone.utc)
+                    socket.send_pyobj(
+                        ReplyEvents(
+                            [
+                                fzf_entry_from_event(i, event, now)
+                                for i, event in enumerate(
+                                    events[start : start + count], start=start
+                                )
+                            ]
                         )
+                    )
 
-                    case RequestResult(index):
-                        event = self.events[index]
-                        socket.send_pyobj(ReplyResult(event.command))
+                case RequestResult(index):
+                    event = events[index]
+                    socket.send_pyobj(ReplyResult(event.command))
 
-                    case _ as never:
-                        assert_never(never)
-
-
-@contextmanager
-def running_server(server: Server):
-    with thread(server.run):
-        yield server
+                case _ as never:
+                    assert_never(never)
 
 
 app = Typer(pretty_exceptions_enable=False)
@@ -403,9 +389,7 @@ def frames():
 
 @app.command()
 def serve():
-    # TODO no need for a context here
-    with running_server(Server.from_path()):
-        pass
+    run_server(Path("test-data"))
 
 
 def fzf_entry_from_event(i: int, event: Event, now: datetime) -> str:
