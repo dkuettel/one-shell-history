@@ -1,10 +1,38 @@
 #!/bin/zsh
 set -eu -o pipefail
 
+# args=(
+#     --height=70%
+#     --min-height=10
+#     --header-lines=1
+#     --query=${1:-}
+#     --tiebreak=index
+#     --scheme=history
+#     # TODO --tac for reverse?
+#     --read0
+#     --info=inline-right
+#     --highlight-line
+#     --delimiter=\\x1f
+#     --with-nth=2..
+#     --nth=2..
+#     --preview-window=down:10:wrap
+#     --preview='python -m draft get-preview {1}'
+#     --print0
+#     --print-query
+#     # TODO use the actual session id
+#     --bind 'start:execute-silent(python -m draft serve --session=2e715f13-1248-443f-ae0f-65d315ae9b18 &)+reload(python -m draft list-events)'
+#     --bind 'enter:become(python -m draft exit --index {1})'
+#     --bind 'esc:become(python -m draft exit --fail)'
+#     --bind 'ctrl-c:become(python -m draft exit --fail)'
+#     --bind 'tab:reload(python -m draft list-events --mode=next)'
+#     --bind 'shift-tab:reload(python -m draft list-events --mode=previous)'
+# )
+# unshare -r -n fzf $args
+
 args=(
     --height=70%
     --min-height=10
-    --header-lines=1
+    # --header-lines=1
     --query=${1:-}
     --tiebreak=index
     --scheme=history
@@ -13,18 +41,18 @@ args=(
     --info=inline-right
     --highlight-line
     --delimiter=\\x1f
-    --with-nth=2..
+    --with-nth=3..
     --nth=2..
     --preview-window=down:10:wrap
-    --preview='python -m draft get-preview {1}'
+    --preview='echo {2} | base64 --decode'
     --print0
     --print-query
     # TODO use the actual session id
-    --bind 'start:execute-silent(python -m draft serve --session=2e715f13-1248-443f-ae0f-65d315ae9b18 &)+reload(python -m draft list-events)'
-    --bind 'enter:become(python -m draft exit --index {1})'
-    --bind 'esc:become(python -m draft exit --fail)'
-    --bind 'ctrl-c:become(python -m draft exit --fail)'
-    --bind 'tab:reload(python -m draft list-events --mode=next)'
-    --bind 'shift-tab:reload(python -m draft list-events --mode=previous)'
+    --bind 'start:reload(python -m draft direct)'
+    --bind 'enter:become(echo {1} | base64 --decode)'
+    # --bind 'esc:become(python -m draft exit --fail)'
+    # --bind 'ctrl-c:become(python -m draft exit --fail)'
+    # --bind 'tab:reload(python -m draft list-events --mode=next)'
+    # --bind 'shift-tab:reload(python -m draft list-events --mode=previous)'
 )
-unshare -r -n fzf $args
+fzf $args

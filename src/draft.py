@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from base64 import b64encode
 from collections.abc import Callable, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -442,6 +443,22 @@ def list_events(mode: ModeChange | None = None):
                 case _ as never:
                     assert_never(never)
             start += batch
+
+
+@app.command()
+def direct():
+    events = load_history(Path("test-data"))
+    now = datetime.now(timezone.utc)
+    for event in events:
+        print(fzf_entry_from_event_direct(event, now), end=fzf_end)
+
+
+def fzf_entry_from_event_direct(event: Event, now: datetime) -> str:
+    enc_cmd = b64encode(event.command.encode()).decode()
+    enc_preview = b64encode("preview".encode()).decode()
+    ago = human_duration(now - event.timestamp)
+    cmd = event.command.replace("\n", "")
+    return f"{enc_cmd}{fzf_sep}{enc_preview}{fzf_sep}[{ago: >3} ago] {fzf_sep}{cmd}"
 
 
 if __name__ == "__main__":
