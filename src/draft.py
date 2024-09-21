@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import re
 from collections.abc import Callable, Iterator
@@ -223,6 +225,16 @@ class ReplyResult:
     content: str
 
 
+@dataclass(frozen=True)
+class RequestMode:
+    change: ModeChange | None
+
+
+@dataclass(frozen=True)
+class ReplyMode:
+    mode: Mode
+
+
 @contextmanager
 def request_socket():
     with (
@@ -263,7 +275,17 @@ def thread(target: Callable[[], None]):
         thread.join()
 
 
-def run_server(base: Path):
+class Mode(Enum):
+    reverse = "reverse"
+    session = "session"
+
+
+class ModeChange(Enum):
+    next = "next"
+    previous = "previous"
+
+
+def run_server(base: Path, mode: Mode):
     # TODO just for testing, not incremental yet, not backgrounded
     events = load_history(base, Order.recent_first)
     # events, indexed = index_history(events)
@@ -309,8 +331,25 @@ def run_server(base: Path):
                     event = events[index]
                     socket.send_pyobj(ReplyResult(event.command))
 
+                case RequestMode(change):
+                    if change is not None:
+                        mode = change_mode(mode, change)
+                    socket.send_pyobj(ReplyMode(mode))
+
                 case _ as never:
                     assert_never(never)
+
+
+def change_mode(mode: Mode, change: ModeChange) -> Mode:
+    modes = list(Mode)
+    i = modes.index(mode)
+    match change:
+        case ModeChange.next:
+            return modes[(i + 1) % len(modes)]
+        case ModeChange.previous:
+            return modes[(i - 1) % len(modes)]
+        case _ as never:
+            assert_never(never)
 
 
 def fzf_entry_from_event(i: int, event: Event, now: datetime) -> str:
@@ -322,6 +361,7 @@ def fzf_entry_from_event(i: int, event: Event, now: datetime) -> str:
 app = Typer(pretty_exceptions_enable=False)
 
 
+# TODO try for aggregation
 @app.command()
 def frames():
     import pandas
@@ -344,8 +384,10 @@ def frames():
 
 
 @app.command()
-def serve():
-    run_server(Path("test-data"))
+def serve(mode: Mode | None = None):
+    if mode is None:
+        mode = Mode.reverse
+    run_server(Path("test-data"), mode)
 
 
 @app.command()
@@ -372,7 +414,7 @@ def exit(index: int | None = None, fail: bool = False):
 
 
 @app.command()
-def preview(index: int):
+def get_preview(index: int):
     with request_socket() as socket:
         socket.send_pyobj(RequestPreview(index))
         match socket.recv_pyobj():
@@ -383,11 +425,17 @@ def preview(index: int):
 
 
 @app.command()
-def backwards():
+def list_events(mode: ModeChange | None = None):
     # TODO not supporting session yet, and also modes and all that, aggregation, mode state is kept by the server?
-    # query = "test"
     # session = "2e715f13-1248-443f-ae0f-65d315ae9b18"
     with request_socket() as socket:
+        socket.send_pyobj(RequestMode(mode))
+        match socket.recv_pyobj():
+            case ReplyMode(m):
+                print(f"\x1f{m}", end="\x00")
+            case _ as never:
+                assert_never(never)
+
         start, batch = 0, 1000
         while True:
             socket.send_pyobj(RequestEvents(start, batch))

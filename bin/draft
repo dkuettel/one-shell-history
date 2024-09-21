@@ -4,7 +4,7 @@ set -eu -o pipefail
 args=(
     --height=70%
     --min-height=10
-    --header=some-header  # TODO get from server
+    --header-lines=1
     --query=${1:-}
     --tiebreak=index
     --scheme=history
@@ -16,13 +16,14 @@ args=(
     --with-nth=2..
     --nth=2..
     --preview-window=down:10:wrap
-    --preview='python -m draft preview {1}'
+    --preview='python -m draft get-preview {1}'
     --print0
     --print-query
-    --bind 'start:execute-silent(python -m draft serve &)+reload(python -m draft backwards)'
-    # --bind 'tab:reload(python -m draft fast --next $mode)'  # TODO support modes
+    --bind 'start:execute-silent(python -m draft serve &)+reload(python -m draft list-events)'
     --bind 'enter:become(python -m draft exit --index {1})'
     --bind 'esc:become(python -m draft exit --fail)'
     --bind 'ctrl-c:become(python -m draft exit --fail)'
+    --bind 'tab:reload(python -m draft list-events --mode=next)'
+    --bind 'shift-tab:reload(python -m draft list-events --mode=previous)'
 )
 unshare -r -n fzf $args
