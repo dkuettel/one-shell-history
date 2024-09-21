@@ -42,7 +42,7 @@ def load_osh_history(base: Path) -> Iterator[Event]:
     #     for i in decoder.decode_lines(source.read_text()):
     #         if i.event is not None:
     #             yield i.event
-    # TODO not so easy to read it reverse ... unless we make a file format that supports that well? (utf8 is painful here)
+    # TODO not so easy to read it reverse ... unless we make a file format that supports that well? (utf8 is painful here, fixed lengths?)
     # or we could remember what we read last time, and if the last content is still the same, we know where to continue, that should be very little
     # (but still would not be backwards)
     for source in sources:
@@ -65,6 +65,7 @@ def read_zsh_file(file: Path):
     # TODO no expanduser anymore
     # in a way that should be gone after the zsh/python boundary
     # after all, how then would you ever have a file with actual ~ in it?
+    # ok but it only does ~ at the beginning, so its not that bad
     file = file.expanduser()
 
     events = []
@@ -128,6 +129,7 @@ def load_legacy(base: Path):
 
 
 class Order(Enum):
+    # TODO shaky to use the values we need for sorted :)
     recent_first = True
     oldest_first = False
 
@@ -253,6 +255,7 @@ def preview_from_event(event: Event, tz: tzinfo) -> str:
             dt = human_duration(duration)
             parts = [
                 f"[returned {exit_code} after {dt} on {ts}]",
+                # TODO replace ~ again?
                 f"[ran in {folder} on {machine}]",
                 "",
                 event.command,
