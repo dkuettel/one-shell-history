@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
@@ -35,23 +35,15 @@ class Entry(msgspec.Struct):
     event: Optional[Event] = None
 
 
-def load_osh_history(base: Path) -> Iterator[Event]:
+def load_osh_histories(base: Path) -> list[Event]:
     sources = base.rglob("*.osh")
     decoder = msgspec.json.Decoder(type=Entry)
-    # for source in sources:
-    #     for i in decoder.decode_lines(source.read_text()):
-    #         if i.event is not None:
-    #             yield i.event
-    # TODO not so easy to read it reverse ... unless we make a file format that supports that well? (utf8 is painful here, fixed lengths?)
-    # or we could remember what we read last time, and if the last content is still the same, we know where to continue, that should be very little
-    # (but still would not be backwards)
-    for source in sources:
-        with source.open("rt") as f:
-            for l in f:
-                if len(l) > 0:
-                    match decoder.decode(l).event:
-                        case Event() as e:
-                            yield e
+    return [
+        i.event
+        for source in sources
+        for i in decoder.decode_lines(source.read_text())
+        if i.event is not None
+    ]
 
 
 event_pattern = re.compile(r"^: (?P<timestamp>\d+):(?P<duration>\d+);(?P<command>.*)$")
@@ -128,34 +120,10 @@ def load_legacy(base: Path):
     return events
 
 
-class Order(Enum):
-    # TODO shaky to use the values we need for sorted :)
-    recent_first = True
-    oldest_first = False
-
-
-def load_history(base: Path, order: Order) -> Iterator[Event]:
-    # cache = base / "cache.pickle"
-    # if cache.exists():
-    #     return pickle.loads(cache.read_bytes())
-    # TODO eventually try threads or processes per file? not per file type, and incremental for early start?
-    events = load_osh_history(base)  # + load_zsh(base) + load_legacy(base)
-    events = sorted(events, key=lambda e: e.timestamp, reverse=order.value)
-    # cache.write_bytes(pickle.dumps(events))
-    return iter(events)
-
-
-def index_history(
-    events: Iterator[Event],
-) -> tuple[Iterator[tuple[int, Event]], list[Event]]:
-    indexed: list[Event] = []
-
-    def g() -> Iterator[tuple[int, Event]]:
-        for i, event in enumerate(events):
-            indexed.append(event)
-            yield i, event
-
-    return g(), indexed
+def load_merged_histories(base: Path) -> list[Event]:
+    """history is from new to old, first entry is the most recent"""
+    events = load_osh_histories(base)  # + load_zsh(base) + load_legacy(base)
+    return sorted(events, key=lambda e: e.timestamp, reverse=True)
 
 
 def human_duration(dt: timedelta | float) -> str:
@@ -290,16 +258,14 @@ class ModeChange(Enum):
 
 
 def run_server(base: Path, session: str | None, mode: Mode):
-    # TODO not supporting session yet, and also modes and all that, aggregation, mode state is kept by the server?
-    # TODO just for testing, not incremental yet, not backgrounded
-    events = load_history(base, Order.recent_first)
-    # events, indexed = index_history(events)
-    events = list(events)
+    events = load_merged_histories(base)
 
-    if session is not None:
-        session_events = [e for e in events if e.session == session]
+    modes = list(Mode)
+    if session is None:
+        modes.remove(Mode.session)
+        session_events = []
     else:
-        session_events = events  # TODO just disable session mode in this case
+        session_events = [(i, e) for i, e in enumerate(events) if e.session == session]
 
     tz = datetime.now().astimezone().tzinfo
     assert tz is not None
@@ -314,13 +280,9 @@ def run_server(base: Path, session: str | None, mode: Mode):
             match socket.recv_pyobj():
                 case RequestExit():
                     socket.send_pyobj(ReplyExit())
-                    # TODO what about the loading thread(s)? it might not be finished yet? can we interrupt it?
                     return
 
                 case RequestPreview(index):
-                    if index >= len(events):
-                        socket.send(b"... loading ...")
-                        continue
                     event = events[index]
                     socket.send_pyobj(ReplyPreview(preview_from_event(event, tz)))
 
@@ -328,30 +290,18 @@ def run_server(base: Path, session: str | None, mode: Mode):
                     now = datetime.now(timezone.utc)
                     match mode:
                         case Mode.reverse:
-                            socket.send_pyobj(
-                                ReplyEvents(
-                                    [
-                                        fzf_entry_from_event(i, event, now)
-                                        for i, event in enumerate(
-                                            events[start : start + count], start=start
-                                        )
-                                    ]
-                                )
+                            mode_events = enumerate(
+                                events[start : start + count], start=start
                             )
                         case Mode.session:
-                            socket.send_pyobj(
-                                ReplyEvents(
-                                    [
-                                        fzf_entry_from_event(i, event, now)
-                                        for i, event in enumerate(
-                                            session_events[start : start + count],
-                                            start=start,
-                                        )
-                                    ]
-                                )
-                            )
+                            mode_events = session_events[start : start + count]
                         case _ as never:
                             assert_never(never)
+                    socket.send_pyobj(
+                        ReplyEvents(
+                            [fzf_entry_from_event(i, e, now) for i, e in mode_events]
+                        )
+                    )
 
                 case RequestResult(index):
                     event = events[index]
@@ -359,15 +309,14 @@ def run_server(base: Path, session: str | None, mode: Mode):
 
                 case RequestMode(change):
                     if change is not None:
-                        mode = change_mode(mode, change)
+                        mode = change_mode(mode, change, modes)
                     socket.send_pyobj(ReplyMode(mode))
 
                 case _ as never:
                     assert_never(never)
 
 
-def change_mode(mode: Mode, change: ModeChange) -> Mode:
-    modes = list(Mode)
+def change_mode(mode: Mode, change: ModeChange, modes: Sequence[Mode]) -> Mode:
     i = modes.index(mode)
     match change:
         case ModeChange.next:
@@ -403,10 +352,6 @@ def frames():
     # unless we make the format better for pandas?
     # speed was actually faster when loading with msgspec and then passing to dataframes
     # but need to properly unpack into columns
-
-
-# TODO typer import seems to be the majority of startup time ... click is actually quite a bit faster
-# TODO consider heapq.merge?
 
 
 @app.command()
