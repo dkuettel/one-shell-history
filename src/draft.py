@@ -16,6 +16,7 @@ import zmq
 from typer import Exit, Typer
 
 
+# TODO discuss with yves a new format?
 class Event(msgspec.Struct, frozen=True):
     timestamp: datetime
     command: str
