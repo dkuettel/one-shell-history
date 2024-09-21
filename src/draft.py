@@ -15,6 +15,9 @@ import msgspec
 import zmq
 from typer import Exit, Typer
 
+fzf_sep = "\x1f"  # fzf field separator
+fzf_end = "\x00"  # fzf record separator
+
 
 # TODO discuss with yves a new format?
 class Event(msgspec.Struct, frozen=True):
@@ -49,7 +52,7 @@ def load_osh_histories(base: Path) -> list[Event]:
 event_pattern = re.compile(r"^: (?P<timestamp>\d+):(?P<duration>\d+);(?P<command>.*)$")
 
 
-def read_zsh_file(file: Path):
+def read_zsh_file(file: Path) -> list[Event]:
     # TODO i'm not sure if all zsh history are the format as below, or does it depend on zsh settings?
     # maybe check what it looks like on a fresh system
     # and/or see that we fail if not as expected
@@ -86,13 +89,13 @@ def read_zsh_file(file: Path):
     return events
 
 
-def load_zsh(base: Path):
+def load_zsh(base: Path) -> list[Event]:
     sources = base.rglob("*.zsh_history")
     events = [event for source in sources for event in read_zsh_file(source)]
     return events
 
 
-def read_osh_legacy_file(file: Path, skip_imported: bool = True):
+def read_osh_legacy_file(file: Path, skip_imported: bool = True) -> list[Event]:
     from osh.history import Event as OshEvent
 
     # TODO we dont like expanduser
@@ -114,16 +117,17 @@ def read_osh_legacy_file(file: Path, skip_imported: bool = True):
     return [Event(e.timestamp, e.command) for e in events]
 
 
-def load_legacy(base: Path):
+def load_legacy(base: Path) -> list[Event]:
     sources = base.rglob("*.osh_legacy")
     events = [event for source in sources for event in read_osh_legacy_file(source)]
     return events
 
 
-def load_merged_histories(base: Path) -> list[Event]:
+def load_history(base: Path) -> list[Event]:
     """history is from new to old, first entry is the most recent"""
-    events = load_osh_histories(base)  # + load_zsh(base) + load_legacy(base)
-    return sorted(events, key=lambda e: e.timestamp, reverse=True)
+    events = load_osh_histories(base) + load_zsh(base) + load_legacy(base)
+    events = sorted(events, key=lambda e: e.timestamp, reverse=True)
+    return events
 
 
 def human_duration(dt: timedelta | float) -> str:
@@ -258,14 +262,14 @@ class ModeChange(Enum):
 
 
 def run_server(base: Path, session: str | None, mode: Mode):
-    events = load_merged_histories(base)
+    # TODO this can be slow
+    events = load_history(base)
 
     modes = list(Mode)
     if session is None:
         modes.remove(Mode.session)
-        session_events = []
-    else:
-        session_events = [(i, e) for i, e in enumerate(events) if e.session == session]
+
+    session_events: list[tuple[int, Event]] | None = None
 
     tz = datetime.now().astimezone().tzinfo
     assert tz is not None
@@ -294,6 +298,13 @@ def run_server(base: Path, session: str | None, mode: Mode):
                                 events[start : start + count], start=start
                             )
                         case Mode.session:
+                            # TODO this can be slow, prepare, but not blocking?
+                            if session_events is None:
+                                session_events = [
+                                    (i, e)
+                                    for i, e in enumerate(events)
+                                    if e.session == session
+                                ]
                             mode_events = session_events[start : start + count]
                         case _ as never:
                             assert_never(never)
@@ -330,7 +341,7 @@ def change_mode(mode: Mode, change: ModeChange, modes: Sequence[Mode]) -> Mode:
 def fzf_entry_from_event(i: int, event: Event, now: datetime) -> str:
     ago = human_duration(now - event.timestamp)
     cmd = event.command.replace("\n", "")
-    return f"{i}\x1f[{ago: >3} ago] \x1f{cmd}"
+    return f"{i}{fzf_sep}[{ago: >3} ago] {fzf_sep}{cmd}"
 
 
 app = Typer(pretty_exceptions_enable=False)
@@ -402,7 +413,7 @@ def list_events(mode: ModeChange | None = None):
         socket.send_pyobj(RequestMode(mode))
         match socket.recv_pyobj():
             case ReplyMode(m):
-                print(f"\x1f{m}", end="\x00")
+                print(f"{fzf_sep}{m}", end=fzf_end)
             case _ as never:
                 assert_never(never)
 
@@ -414,7 +425,7 @@ def list_events(mode: ModeChange | None = None):
                     break
                 case ReplyEvents(events):
                     for event in events:
-                        print(event, end="\x00")
+                        print(event, end=fzf_end)
                 case _ as never:
                     assert_never(never)
             start += batch
