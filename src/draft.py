@@ -127,6 +127,12 @@ def load_history(base: Path) -> list[Event]:
     """history is from new to old, first entry is the most recent"""
     events = load_osh_histories(base) + load_zsh(base) + load_legacy(base)
     events = sorted(events, key=lambda e: e.timestamp, reverse=True)
+
+    # TODO msgspec is actually super fast, json is already good compared to pickle
+    # and msgpack seems even a bit faster
+    # so we could make the source format already this way, and we could cache things
+    # we have a class cache state, and maybe even know where to continue reading active files, if needed
+
     return events
 
 
@@ -262,6 +268,13 @@ class ModeChange(Enum):
 
 
 def run_server(base: Path, session: str | None, mode: Mode):
+    # TODO is it worth doing all the zmq stuff? if we load it anyway, can do it on the spot?
+    # I think only the preview is an issue, how to refer to things so you can find them again?
+    # maybe file + index? then the design becomes super easy
+    # or we totally encode the preview in the fzf entry? seems crazy, but probably not slow really
+    # and then either our small entry point that expands it, or use json or something
+    # ah, and also the return value is a problem, encode them basexx?
+
     # TODO this can be slow
     events = load_history(base)
 
