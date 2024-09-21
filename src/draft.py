@@ -285,11 +285,17 @@ class ModeChange(Enum):
     previous = "previous"
 
 
-def run_server(base: Path, mode: Mode):
+def run_server(base: Path, session: str | None, mode: Mode):
+    # TODO not supporting session yet, and also modes and all that, aggregation, mode state is kept by the server?
     # TODO just for testing, not incremental yet, not backgrounded
     events = load_history(base, Order.recent_first)
     # events, indexed = index_history(events)
     events = list(events)
+
+    if session is not None:
+        session_events = [e for e in events if e.session == session]
+    else:
+        session_events = events  # TODO just disable session mode in this case
 
     tz = datetime.now().astimezone().tzinfo
     assert tz is not None
@@ -316,16 +322,32 @@ def run_server(base: Path, mode: Mode):
 
                 case RequestEvents(start, count):
                     now = datetime.now(timezone.utc)
-                    socket.send_pyobj(
-                        ReplyEvents(
-                            [
-                                fzf_entry_from_event(i, event, now)
-                                for i, event in enumerate(
-                                    events[start : start + count], start=start
+                    match mode:
+                        case Mode.reverse:
+                            socket.send_pyobj(
+                                ReplyEvents(
+                                    [
+                                        fzf_entry_from_event(i, event, now)
+                                        for i, event in enumerate(
+                                            events[start : start + count], start=start
+                                        )
+                                    ]
                                 )
-                            ]
-                        )
-                    )
+                            )
+                        case Mode.session:
+                            socket.send_pyobj(
+                                ReplyEvents(
+                                    [
+                                        fzf_entry_from_event(i, event, now)
+                                        for i, event in enumerate(
+                                            session_events[start : start + count],
+                                            start=start,
+                                        )
+                                    ]
+                                )
+                            )
+                        case _ as never:
+                            assert_never(never)
 
                 case RequestResult(index):
                     event = events[index]
@@ -384,10 +406,11 @@ def frames():
 
 
 @app.command()
-def serve(mode: Mode | None = None):
+def serve(session: str | None = None, mode: Mode | None = None):
+    # TODO we could also get session and session start from the env?
     if mode is None:
         mode = Mode.reverse
-    run_server(Path("test-data"), mode)
+    run_server(base=Path("test-data"), session=session, mode=mode)
 
 
 @app.command()
@@ -426,8 +449,6 @@ def get_preview(index: int):
 
 @app.command()
 def list_events(mode: ModeChange | None = None):
-    # TODO not supporting session yet, and also modes and all that, aggregation, mode state is kept by the server?
-    # session = "2e715f13-1248-443f-ae0f-65d315ae9b18"
     with request_socket() as socket:
         socket.send_pyobj(RequestMode(mode))
         match socket.recv_pyobj():

@@ -19,7 +19,8 @@ args=(
     --preview='python -m draft get-preview {1}'
     --print0
     --print-query
-    --bind 'start:execute-silent(python -m draft serve &)+reload(python -m draft list-events)'
+    # TODO use the actual session id
+    --bind 'start:execute-silent(python -m draft serve --session=2e715f13-1248-443f-ae0f-65d315ae9b18 &)+reload(python -m draft list-events)'
     --bind 'enter:become(python -m draft exit --index {1})'
     --bind 'esc:become(python -m draft exit --fail)'
     --bind 'ctrl-c:become(python -m draft exit --fail)'
