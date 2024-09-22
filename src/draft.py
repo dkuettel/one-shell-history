@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 from base64 import b64encode
 from collections.abc import Sequence
@@ -203,24 +202,14 @@ def entry_from_event(event: Event, now: datetime, tz: tzinfo, mode: Mode) -> str
 
 
 class Mode(Enum):
-    reverse_global = "reverse-global"
-    reverse_session = "reverse-session"
+    all = "all"
+    session = "session"
+    folder = "folder"
 
 
-class ModeChange(Enum):
-    next = "next"
-    previous = "previous"
-
-
-def change_mode(mode: Mode, change: ModeChange, modes: Sequence[Mode]) -> Mode:
+def change_mode(mode: Mode, change: int, modes: Sequence[Mode]) -> Mode:
     i = modes.index(mode)
-    match change:
-        case ModeChange.next:
-            return modes[(i + 1) % len(modes)]
-        case ModeChange.previous:
-            return modes[(i - 1) % len(modes)]
-        case _ as never:
-            assert_never(never)
+    return modes[(i + change) % len(modes)]
 
 
 app = Typer(pretty_exceptions_enable=False)
@@ -247,18 +236,26 @@ def frames():
 @app.command()
 def search(
     mode: Mode | None = None,
-    change: ModeChange | None = None,
+    mode_after: Mode | None = None,
+    mode_before: Mode | None = None,
     session: str | None = None,
+    folder: str | None = None,
 ):
-    if mode is None:
-        mode = Mode.reverse_global
-
     modes = list(Mode)
     if session is None:
-        modes.remove(Mode.reverse_session)
+        modes.remove(Mode.session)
+    if folder is None:
+        modes.remove(Mode.folder)
+    # TODO we could also make a datatype that has the info needed for the modes, pyright is happier
 
-    if change is not None:
-        mode = change_mode(mode, change, modes)
+    if mode_after is not None:
+        mode = change_mode(mode_after, 1, modes)
+
+    if mode_before is not None:
+        mode = change_mode(mode_before, -1, modes)
+
+    if mode is None:
+        mode = Mode.all
 
     header = mode.value + " - " + ", ".join(m.value for m in modes)
     print(
@@ -276,8 +273,20 @@ def search(
 
     events = load_history(Path("test-data"))
 
-    if mode is Mode.reverse_session and session is not None:
-        events = [e for e in events if e.session == session]
+    match mode:
+        case Mode.all:
+            events = [e for e in events if e.session is not None]
+
+        case Mode.session:
+            assert session is not None
+            events = [e for e in events if e.session == session]
+
+        case Mode.folder:
+            assert folder is not None
+            events = [e for e in events if e.folder == folder]
+
+        case _ as never:
+            assert_never(never)
 
     now = datetime.now().astimezone()
     tz = now.tzinfo

@@ -51,9 +51,10 @@ args=(
     --print0
     --print-query
     # TODO use the actual session id
-    --bind 'start:reload(python -m draft search --session=2e715f13-1248-443f-ae0f-65d315ae9b18)'
+    # TODO pass session, folder, and other stuff via env of args?
+    --bind 'start:reload(python -m draft search --session=2e715f13-1248-443f-ae0f-65d315ae9b18 --folder=/home/dkuettel)'
     --bind 'enter:become(echo {2} | base64 --decode)'
-    --bind 'tab:reload(python -m draft search --mode={1} --change=next --session=2e715f13-1248-443f-ae0f-65d315ae9b18)'
-    --bind 'shift-tab:reload(python -m draft search --mode={1} --change=previous --session=2e715f13-1248-443f-ae0f-65d315ae9b18)'
+    --bind 'tab:reload(python -m draft search --mode-after={1} --session=2e715f13-1248-443f-ae0f-65d315ae9b18 --folder=/home/dkuettel)'
+    --bind 'shift-tab:reload(python -m draft search --mode-before={1} --session=2e715f13-1248-443f-ae0f-65d315ae9b18 --folder=/home/dkuettel)'
 )
 fzf $args
