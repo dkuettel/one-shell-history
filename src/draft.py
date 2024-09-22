@@ -164,57 +164,6 @@ def human_duration(dt: timedelta | float) -> str:
     return f"{round(y)}y"
 
 
-@dataclass(frozen=True)
-class RequestExit:
-    pass
-
-
-@dataclass(frozen=True)
-class ReplyExit:
-    pass
-
-
-@dataclass(frozen=True)
-class RequestPreview:
-    index: int
-
-
-@dataclass(frozen=True)
-class ReplyPreview:
-    content: str
-
-
-@dataclass(frozen=True)
-class RequestEvents:
-    start: int
-    count: int
-
-
-@dataclass(frozen=True)
-class ReplyEvents:
-    events: list[str]
-
-
-@dataclass(frozen=True)
-class RequestResult:
-    index: int
-
-
-@dataclass(frozen=True)
-class ReplyResult:
-    content: str
-
-
-@dataclass(frozen=True)
-class RequestMode:
-    change: ModeChange | None
-
-
-@dataclass(frozen=True)
-class ReplyMode:
-    mode: Mode
-
-
 def preview_from_event(event: Event, tz: tzinfo) -> str:
     ts = event.timestamp.astimezone(tz)
     match event.folder, event.machine, event.exit_code, event.duration:
