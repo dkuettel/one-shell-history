@@ -276,8 +276,8 @@ def search(
     assert mode in searches
     search = searches[mode]
 
-    header = " - ".join(
-        (f"[{name}]" if s is search else name) for name, s in searches.items()
+    header = "/".join(
+        (f"[{name}]" if s is search else f" {name} ") for name, s in searches.items()
     )
     print(
         fzf_sep.join(
