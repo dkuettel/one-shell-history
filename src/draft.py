@@ -3,18 +3,15 @@ from __future__ import annotations
 import json
 import re
 from base64 import b64encode
-from collections.abc import Callable, Sequence
-from contextlib import contextmanager
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
 from enum import Enum
 from pathlib import Path
-from threading import Thread
 from typing import Optional, assert_never
 
 import msgspec
-import zmq
-from typer import Exit, Typer
+from typer import Typer
 
 fzf_sep = "\x1f"  # fzf field separator
 fzf_end = "\x00"  # fzf record separator
@@ -217,16 +214,6 @@ class ReplyMode:
     mode: Mode
 
 
-@contextmanager
-def request_socket():
-    with (
-        zmq.Context() as context,
-        context.socket(zmq.REQ) as socket,
-    ):
-        socket.connect("ipc://@server")
-        yield socket
-
-
 def preview_from_event(event: Event, tz: tzinfo) -> str:
     ts = event.timestamp.astimezone(tz)
     match event.folder, event.machine, event.exit_code, event.duration:
@@ -248,14 +235,20 @@ def preview_from_event(event: Event, tz: tzinfo) -> str:
     return "\n".join(parts)
 
 
-@contextmanager
-def thread(target: Callable[[], None]):
-    thread = Thread(target=target)
-    thread.start()
-    try:
-        yield
-    finally:
-        thread.join()
+def entry_from_event(event: Event, now: datetime, tz: tzinfo) -> str:
+    enc_cmd = b64encode(event.command.encode()).decode()
+    enc_preview = b64encode(preview_from_event(event, tz).encode()).decode()
+    ago = human_duration(now - event.timestamp)
+    # TODO for safety remove/replace all fzf_*, especially fzf_end
+    cmd = event.command.replace("\n", "")
+    return fzf_sep.join(
+        [
+            enc_cmd,
+            enc_preview,
+            f"[{ago: >3} ago] ",
+            cmd,
+        ]
+    )
 
 
 class Mode(Enum):
@@ -268,79 +261,6 @@ class ModeChange(Enum):
     previous = "previous"
 
 
-def run_server(base: Path, session: str | None, mode: Mode):
-    # TODO is it worth doing all the zmq stuff? if we load it anyway, can do it on the spot?
-    # I think only the preview is an issue, how to refer to things so you can find them again?
-    # maybe file + index? then the design becomes super easy
-    # or we totally encode the preview in the fzf entry? seems crazy, but probably not slow really
-    # and then either our small entry point that expands it, or use json or something
-    # ah, and also the return value is a problem, encode them basexx?
-
-    # TODO this can be slow
-    events = load_history(base)
-
-    modes = list(Mode)
-    if session is None:
-        modes.remove(Mode.session)
-
-    session_events: list[tuple[int, Event]] | None = None
-
-    tz = datetime.now().astimezone().tzinfo
-    assert tz is not None
-
-    with (
-        zmq.Context() as context,
-        context.socket(zmq.REP) as socket,
-    ):
-        socket.bind("ipc://@server")
-
-        while True:
-            match socket.recv_pyobj():
-                case RequestExit():
-                    socket.send_pyobj(ReplyExit())
-                    return
-
-                case RequestPreview(index):
-                    event = events[index]
-                    socket.send_pyobj(ReplyPreview(preview_from_event(event, tz)))
-
-                case RequestEvents(start, count):
-                    now = datetime.now(timezone.utc)
-                    match mode:
-                        case Mode.reverse:
-                            mode_events = enumerate(
-                                events[start : start + count], start=start
-                            )
-                        case Mode.session:
-                            # TODO this can be slow, prepare, but not blocking?
-                            if session_events is None:
-                                session_events = [
-                                    (i, e)
-                                    for i, e in enumerate(events)
-                                    if e.session == session
-                                ]
-                            mode_events = session_events[start : start + count]
-                        case _ as never:
-                            assert_never(never)
-                    socket.send_pyobj(
-                        ReplyEvents(
-                            [fzf_entry_from_event(i, e, now) for i, e in mode_events]
-                        )
-                    )
-
-                case RequestResult(index):
-                    event = events[index]
-                    socket.send_pyobj(ReplyResult(event.command))
-
-                case RequestMode(change):
-                    if change is not None:
-                        mode = change_mode(mode, change, modes)
-                    socket.send_pyobj(ReplyMode(mode))
-
-                case _ as never:
-                    assert_never(never)
-
-
 def change_mode(mode: Mode, change: ModeChange, modes: Sequence[Mode]) -> Mode:
     i = modes.index(mode)
     match change:
@@ -350,12 +270,6 @@ def change_mode(mode: Mode, change: ModeChange, modes: Sequence[Mode]) -> Mode:
             return modes[(i - 1) % len(modes)]
         case _ as never:
             assert_never(never)
-
-
-def fzf_entry_from_event(i: int, event: Event, now: datetime) -> str:
-    ago = human_duration(now - event.timestamp)
-    cmd = event.command.replace("\n", "")
-    return f"{i}{fzf_sep}[{ago: >3} ago] {fzf_sep}{cmd}"
 
 
 app = Typer(pretty_exceptions_enable=False)
@@ -380,85 +294,22 @@ def frames():
 
 
 @app.command()
-def serve(session: str | None = None, mode: Mode | None = None):
-    # TODO we could also get session and session start from the env?
-    if mode is None:
-        mode = Mode.reverse
-    run_server(base=Path("test-data"), session=session, mode=mode)
+def search_reverse(session: str | None = None):
+    # TODO modes
+    # TODO print the mode as the first line
+    # TODO how to manage mode switching now? we will reload, simple, but how to rotate modes for the user?
 
-
-@app.command()
-def exit(index: int | None = None, fail: bool = False):
-    with request_socket() as socket:
-        match index:
-            case int():
-                socket.send_pyobj(RequestResult(index))
-                match socket.recv_pyobj():
-                    case ReplyResult(content):
-                        print(content)
-                    case _ as never:
-                        assert_never(never)
-            case None:
-                pass
-            case _ as never:
-                assert_never(never)
-
-        socket.send_pyobj(RequestExit())
-        assert socket.recv_pyobj() == ReplyExit()
-
-    if fail:
-        raise Exit(1)
-
-
-@app.command()
-def get_preview(index: int):
-    with request_socket() as socket:
-        socket.send_pyobj(RequestPreview(index))
-        match socket.recv_pyobj():
-            case ReplyPreview(content):
-                print(content)
-            case _ as never:
-                assert_never(never)
-
-
-@app.command()
-def list_events(mode: ModeChange | None = None):
-    with request_socket() as socket:
-        socket.send_pyobj(RequestMode(mode))
-        match socket.recv_pyobj():
-            case ReplyMode(m):
-                print(f"{fzf_sep}{m}", end=fzf_end)
-            case _ as never:
-                assert_never(never)
-
-        start, batch = 0, 1000
-        while True:
-            socket.send_pyobj(RequestEvents(start, batch))
-            match socket.recv_pyobj():
-                case ReplyEvents([]):
-                    break
-                case ReplyEvents(events):
-                    for event in events:
-                        print(event, end=fzf_end)
-                case _ as never:
-                    assert_never(never)
-            start += batch
-
-
-@app.command()
-def direct():
     events = load_history(Path("test-data"))
-    now = datetime.now(timezone.utc)
+
+    if session is not None:
+        events = [e for e in events if e.session == session]
+
+    now = datetime.now().astimezone()
+    tz = now.tzinfo
+    assert tz is not None
+
     for event in events:
-        print(fzf_entry_from_event_direct(event, now), end=fzf_end)
-
-
-def fzf_entry_from_event_direct(event: Event, now: datetime) -> str:
-    enc_cmd = b64encode(event.command.encode()).decode()
-    enc_preview = b64encode("preview".encode()).decode()
-    ago = human_duration(now - event.timestamp)
-    cmd = event.command.replace("\n", "")
-    return f"{enc_cmd}{fzf_sep}{enc_preview}{fzf_sep}[{ago: >3} ago] {fzf_sep}{cmd}"
+        print(entry_from_event(event, now, tz), end=fzf_end)
 
 
 if __name__ == "__main__":

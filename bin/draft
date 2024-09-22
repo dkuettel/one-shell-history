@@ -48,7 +48,7 @@ args=(
     --print0
     --print-query
     # TODO use the actual session id
-    --bind 'start:reload(python -m draft direct)'
+    --bind 'start:reload(python -m draft search-reverse)'
     --bind 'enter:become(echo {1} | base64 --decode)'
     # --bind 'esc:become(python -m draft exit --fail)'
     # --bind 'ctrl-c:become(python -m draft exit --fail)'
