@@ -35,7 +35,7 @@ set -eu -o pipefail
 args=(
     --height=70%
     --min-height=10
-    # --header-lines=1
+    --header-lines=1
     --query=${1:-}
     --tiebreak=index
     --scheme=history

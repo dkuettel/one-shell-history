@@ -3,12 +3,11 @@ from __future__ import annotations
 import json
 import re
 from base64 import b64encode
-from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
 from enum import Enum
 from pathlib import Path
-from typing import Optional, assert_never
+from typing import Literal, Optional, assert_never
 
 import msgspec
 from typer import Typer
@@ -184,7 +183,7 @@ def preview_from_event(event: Event, tz: tzinfo) -> str:
     return "\n".join(parts)
 
 
-def entry_from_event(event: Event, now: datetime, tz: tzinfo, mode: Mode) -> str:
+def entry_from_event(event: Event, now: datetime, tz: tzinfo, mode: ModeName) -> str:
     enc_cmd = b64encode(event.command.encode()).decode()
     enc_preview = b64encode(preview_from_event(event, tz).encode()).decode()
     ago = human_duration(now - event.timestamp)
@@ -192,7 +191,7 @@ def entry_from_event(event: Event, now: datetime, tz: tzinfo, mode: Mode) -> str
     cmd = event.command.replace("\n", "")
     return fzf_sep.join(
         [
-            mode.value,
+            mode,
             enc_cmd,
             enc_preview,
             f"[{ago: >3} ago] ",
@@ -207,10 +206,22 @@ class Mode(Enum):
     folder = "folder"
 
 
-def change_mode(mode: Mode, change: int, modes: Sequence[Mode]) -> Mode:
-    i = modes.index(mode)
-    return modes[(i + change) % len(modes)]
+@dataclass(frozen=True)
+class SearchAll:
+    pass
 
+
+@dataclass(frozen=True)
+class SearchSession:
+    session: str
+
+
+@dataclass(frozen=True)
+class SearchFolder:
+    folder: str
+
+
+Search = SearchAll | SearchSession | SearchFolder
 
 app = Typer(pretty_exceptions_enable=False)
 
@@ -233,35 +244,45 @@ def frames():
     # but need to properly unpack into columns
 
 
+# TODO would be nice, but typer doesnt support it?
+ModeName = Literal["all", "session", "folder"]
+
+
 @app.command()
 def search(
-    mode: Mode | None = None,
-    mode_after: Mode | None = None,
-    mode_before: Mode | None = None,
+    # TODO typer doesnt support Literal :/ but we might want to remove typer anyway because it is slow
+    mode: str | None = None,
+    mode_after: str | None = None,
+    mode_before: str | None = None,
     session: str | None = None,
     folder: str | None = None,
 ):
-    modes = list(Mode)
-    if session is None:
-        modes.remove(Mode.session)
-    if folder is None:
-        modes.remove(Mode.folder)
-    # TODO we could also make a datatype that has the info needed for the modes, pyright is happier
+    searches: dict[ModeName, Search] = {}
+    searches["all"] = SearchAll()
+    if session is not None:
+        searches["session"] = SearchSession(session)
+    if folder is not None:
+        searches["folder"] = SearchFolder(folder)
 
+    modes = list(searches)
     if mode_after is not None:
-        mode = change_mode(mode_after, 1, modes)
-
+        assert mode_after in modes
+        mode = modes[(modes.index(mode_after) + 1) % len(modes)]
     if mode_before is not None:
-        mode = change_mode(mode_before, -1, modes)
-
+        assert mode_before in modes
+        mode = modes[(modes.index(mode_before) - 1) % len(modes)]
     if mode is None:
-        mode = Mode.all
+        mode = "all"
+    assert mode in searches
+    search = searches[mode]
 
-    header = mode.value + " - " + ", ".join(m.value for m in modes)
+    header = " - ".join(
+        (f"[{name}]" if s is search else name) for name, s in searches.items()
+    )
     print(
         fzf_sep.join(
             [
-                mode.value,
+                "",
                 "",
                 "",
                 header,
@@ -273,27 +294,22 @@ def search(
 
     events = load_history(Path("test-data"))
 
-    match mode:
-        case Mode.all:
-            events = [e for e in events if e.session is not None]
-
-        case Mode.session:
-            assert session is not None
+    match search:
+        case SearchAll():
+            pass
+        case SearchSession(session):
             events = [e for e in events if e.session == session]
-
-        case Mode.folder:
-            assert folder is not None
+        case SearchFolder(folder):
             events = [e for e in events if e.folder == folder]
-
         case _ as never:
             assert_never(never)
 
     now = datetime.now().astimezone()
-    tz = now.tzinfo
-    assert tz is not None
+    local_tz = now.tzinfo
+    assert local_tz is not None
 
     for event in events:
-        print(entry_from_event(event, now, tz, mode), end=fzf_end)
+        print(entry_from_event(event, now, local_tz, mode), end=fzf_end)
 
 
 if __name__ == "__main__":
