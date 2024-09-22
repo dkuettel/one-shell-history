@@ -29,14 +29,16 @@ set -eu -o pipefail
 # )
 # unshare -r -n fzf $args
 
-# export modes=${modes:-reverse-global reverse-session}
-# export mode=${mode:-reverse-global}
+# export mode=${mode:-all}
+
+# TODO could also just expand it when doing, or if we pipe anyway, even more clear
+export mode=${1:-all}
 
 args=(
     --height=70%
     --min-height=10
     --header-lines=1
-    --query=${1:-}
+    # --query=${1:-}
     --tiebreak=index
     --scheme=history
     # TODO --tac for reverse?
@@ -52,10 +54,21 @@ args=(
     --print-query
     # TODO use the actual session id
     # TODO pass session, folder, and other stuff via env of args?
-    --bind 'start:reload(python -m draft search --session=2e715f13-1248-443f-ae0f-65d315ae9b18 --folder=/home/dkuettel)'
+    --bind 'start:reload(python -m draft search --mode=$mode --session=2e715f13-1248-443f-ae0f-65d315ae9b18 --folder=/home/dkuettel)'
     --bind 'enter:become(echo {2} | base64 --decode)'
     # TODO looks like fzf blocks a reload until the previous one is done :/
-    --bind 'tab:reload(python -m draft search --mode-after={1} --session=2e715f13-1248-443f-ae0f-65d315ae9b18 --folder=/home/dkuettel)'
-    --bind 'shift-tab:reload(python -m draft search --mode-before={1} --session=2e715f13-1248-443f-ae0f-65d315ae9b18 --folder=/home/dkuettel)'
+    # if we gotta stay with become, then make this a real pipe? does it react then? pipes are created immediately, right? so should be as fast as the start event now?
+    # but at this point, if we can make python startup fast enough, we could manage the mode switch there?
+    # its just said that we cannot do it with a reload :/ it can even now use the wrong current state, if it's still from the on-going reload
+    # for simplicity, it's just the only responsive way currently, so lets do it
+    # TODO is the problem that we work on old data for {1}, and otherwise its actually fast?
+    # --no-clear could make become without flicker, but reload is preferred
+    # TODO maybe instead just make a version that is a selector for mode, and tab goes to that menu, done, easy
+    # --bind 'tab:reload(python -m draft search --mode-after={1} --session=2e715f13-1248-443f-ae0f-65d315ae9b18 --folder=/home/dkuettel)'
+    --bind 'tab:become:draft-modes'
+    # --bind 'tab:become:mode={1} draft'
+    # --bind 'tab:abort+reload(python -m draft search --mode-after={1} --session=2e715f13-1248-443f-ae0f-65d315ae9b18 --folder=/home/dkuettel)'
+    # --bind 'shift-tab:reload(python -m draft search --mode-before={1} --session=2e715f13-1248-443f-ae0f-65d315ae9b18 --folder=/home/dkuettel)'
+    # --bind 'shift-tab:become:draft --mode-before={1}'
 )
 fzf $args
