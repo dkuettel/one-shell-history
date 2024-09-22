@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from base64 import b64encode
 from collections.abc import Sequence
@@ -235,7 +236,7 @@ def preview_from_event(event: Event, tz: tzinfo) -> str:
     return "\n".join(parts)
 
 
-def entry_from_event(event: Event, now: datetime, tz: tzinfo) -> str:
+def entry_from_event(event: Event, now: datetime, tz: tzinfo, mode: Mode) -> str:
     enc_cmd = b64encode(event.command.encode()).decode()
     enc_preview = b64encode(preview_from_event(event, tz).encode()).decode()
     ago = human_duration(now - event.timestamp)
@@ -243,6 +244,7 @@ def entry_from_event(event: Event, now: datetime, tz: tzinfo) -> str:
     cmd = event.command.replace("\n", "")
     return fzf_sep.join(
         [
+            mode.value,
             enc_cmd,
             enc_preview,
             f"[{ago: >3} ago] ",
@@ -252,8 +254,8 @@ def entry_from_event(event: Event, now: datetime, tz: tzinfo) -> str:
 
 
 class Mode(Enum):
-    reverse = "reverse"
-    session = "session"
+    reverse_global = "reverse-global"
+    reverse_session = "reverse-session"
 
 
 class ModeChange(Enum):
@@ -294,14 +296,38 @@ def frames():
 
 
 @app.command()
-def search_reverse(session: str | None = None):
-    # TODO modes
-    # TODO print the mode as the first line
-    # TODO how to manage mode switching now? we will reload, simple, but how to rotate modes for the user?
+def search(
+    mode: Mode | None = None,
+    change: ModeChange | None = None,
+    session: str | None = None,
+):
+    if mode is None:
+        mode = Mode.reverse_global
+
+    modes = list(Mode)
+    if session is None:
+        modes.remove(Mode.reverse_session)
+
+    if change is not None:
+        mode = change_mode(mode, change, modes)
+
+    header = mode.value + " - " + ", ".join(m.value for m in modes)
+    print(
+        fzf_sep.join(
+            [
+                mode.value,
+                "",
+                "",
+                header,
+            ]
+        ),
+        end=fzf_end,
+        flush=True,
+    )
 
     events = load_history(Path("test-data"))
 
-    if session is not None:
+    if mode is Mode.reverse_session and session is not None:
         events = [e for e in events if e.session == session]
 
     now = datetime.now().astimezone()
@@ -309,7 +335,7 @@ def search_reverse(session: str | None = None):
     assert tz is not None
 
     for event in events:
-        print(entry_from_event(event, now, tz), end=fzf_end)
+        print(entry_from_event(event, now, tz, mode), end=fzf_end)
 
 
 if __name__ == "__main__":

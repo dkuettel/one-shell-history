@@ -29,6 +29,9 @@ set -eu -o pipefail
 # )
 # unshare -r -n fzf $args
 
+# export modes=${modes:-reverse-global reverse-session}
+# export mode=${mode:-reverse-global}
+
 args=(
     --height=70%
     --min-height=10
@@ -41,18 +44,16 @@ args=(
     --info=inline-right
     --highlight-line
     --delimiter=\\x1f
-    --with-nth=3..
+    --with-nth=4..
     --nth=2..
     --preview-window=down:10:wrap
-    --preview='echo {2} | base64 --decode'
+    --preview='echo {3} | base64 --decode'
     --print0
     --print-query
     # TODO use the actual session id
-    --bind 'start:reload(python -m draft search-reverse)'
-    --bind 'enter:become(echo {1} | base64 --decode)'
-    # --bind 'esc:become(python -m draft exit --fail)'
-    # --bind 'ctrl-c:become(python -m draft exit --fail)'
-    # --bind 'tab:reload(python -m draft list-events --mode=next)'
-    # --bind 'shift-tab:reload(python -m draft list-events --mode=previous)'
+    --bind 'start:reload(python -m draft search --session=2e715f13-1248-443f-ae0f-65d315ae9b18)'
+    --bind 'enter:become(echo {2} | base64 --decode)'
+    --bind 'tab:reload(python -m draft search --mode={1} --change=next --session=2e715f13-1248-443f-ae0f-65d315ae9b18)'
+    --bind 'shift-tab:reload(python -m draft search --mode={1} --change=previous --session=2e715f13-1248-443f-ae0f-65d315ae9b18)'
 )
 fzf $args
