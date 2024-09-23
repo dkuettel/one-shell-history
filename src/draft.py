@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import re
 from base64 import b64encode
+from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
 from enum import Enum
 from pathlib import Path
@@ -158,47 +160,99 @@ def human_duration(dt: timedelta | float) -> str:
     return f"{round(y)}y"
 
 
-def preview_from_event(event: Event, tz: tzinfo) -> str:
+def preview_from_event(event: Event | BaggedEvent, tz: tzinfo) -> str:
     ts = event.timestamp.astimezone(tz)
-    match event.folder, event.machine, event.exit_code, event.duration:
-        case str() as folder, str() as machine, int() as exit_code, float() as duration:
-            dt = human_duration(duration)
+    match event:
+        case Event():
+            match event.folder, event.machine, event.exit_code, event.duration:
+                case (
+                    str() as folder,
+                    str() as machine,
+                    int() as exit_code,
+                    float() as duration,
+                ):
+                    dt = human_duration(duration)
+                    parts = [
+                        f"[returned {exit_code} after {dt} at {ts}]",
+                        # TODO replace ~ again?
+                        f"[ran in {folder} on {machine}]",
+                        "",
+                        event.command,
+                    ]
+                case _:
+                    parts = [
+                        f"ran on {ts}",
+                        "",
+                        event.command,
+                    ]
+
+        case BaggedEvent():
             parts = [
-                f"[returned {exit_code} after {dt} on {ts}]",
-                # TODO replace ~ again?
-                f"[ran in {folder} on {machine}]",
+                f"[ran {event.count:_} times, most recently at {ts}]",
+                f"[{round(100*event.success_ratio)}% success, {round(100*event.failure_ratio)}% failure, {round(100*event.unknown_ratio)}% unknown]",
                 "",
                 event.command,
             ]
-        case _:
-            parts = [
-                f"ran on {ts}",
-                "",
-                event.command,
-            ]
+
+        case _ as never:
+            assert_never(never)
+
     return "\n".join(parts)
 
 
-def entry_from_event(event: Event, now: datetime, tz: tzinfo) -> str:
+def entry_from_event(event: Event | BaggedEvent, now: datetime, tz: tzinfo) -> str:
     enc_cmd = b64encode(event.command.encode()).decode()
     enc_preview = b64encode(preview_from_event(event, tz).encode()).decode()
     ago = human_duration(now - event.timestamp)
-    # TODO for safety remove/replace all fzf_*, especially fzf_end
     cmd = event.command.replace("\n", "")
     return "\x1f".join(
         [
             enc_cmd,
             enc_preview,
             f"[{ago: >3} ago] ",
+            # TODO for safety remove/replace all fzf_*, especially fzf_end?
             cmd,
         ]
     )
+
+
+@dataclass(frozen=True)
+class BaggedEvent:
+    timestamp: datetime
+    command: str
+    count: int
+    success_ratio: float
+    failure_ratio: float
+    unknown_ratio: float
+
+    @classmethod
+    def from_bag(cls, command: str, bag: Sequence[Event]) -> BaggedEvent:
+        count = len(bag)
+        success = sum(1 for e in bag if e.exit_code == 0)
+        failure = sum(1 for e in bag if e.exit_code is not None and e.exit_code != 0)
+        unknown = sum(1 for e in bag if e.exit_code is None)
+        return cls(
+            timestamp=bag[0].timestamp,
+            command=command,
+            count=count,
+            success_ratio=success / count,
+            failure_ratio=failure / count,
+            unknown_ratio=unknown / count,
+        )
+
+
+def bagged_events(events: list[Event]) -> list[BaggedEvent]:
+    bagged: dict[str, list[Event]] = {}
+    for event in events:
+        bagged.setdefault(event.command, []).append(event)
+    return [BaggedEvent.from_bag(cmd, bag) for cmd, bag in bagged.items()]
 
 
 class Mode(Enum):
     all = "all"
     session = "session"
     folder = "folder"
+    bag = "bag"
 
 
 app = Typer(pretty_exceptions_enable=False)
@@ -242,6 +296,8 @@ def search(
         case Mode.folder:
             if folder is not None:
                 events = [e for e in events if e.folder == folder]
+        case Mode.bag:
+            events = bagged_events(events)
         case _ as never:
             assert_never(never)
 

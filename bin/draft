@@ -1,7 +1,7 @@
 #!/bin/zsh
 set -eu -o pipefail
 
-export mode=${1:-all}  # - to select a mode, or: all, session, folder
+export mode=${1:-all}  # - to select a mode, or: all, session, folder, bag
 export query=${2:-}  # TODO query is not carried over when switching modes, escaping is a bit difficult
 [[ ! -v 3 ]]
 
@@ -25,9 +25,10 @@ if [[ $mode == - ]]; then
         --preview='print -- {2..}'
     )
     (
-        print -- 'all search in all of history'
+        print -- 'all search in all of history, forever, always.'
         print -- 'session search in the current session only'
         print -- 'folder search in the current folder only'
+        print -- 'bag search an aggregated view of all unique commands in all of history, forever, always.'
     ) | fzf $style $args --bind='enter:become:draft {1}'
 fi
 
