@@ -1,74 +1,50 @@
 #!/bin/zsh
 set -eu -o pipefail
 
-# args=(
-#     --height=70%
-#     --min-height=10
-#     --header-lines=1
-#     --query=${1:-}
-#     --tiebreak=index
-#     --scheme=history
-#     # TODO --tac for reverse?
-#     --read0
-#     --info=inline-right
-#     --highlight-line
-#     --delimiter=\\x1f
-#     --with-nth=2..
-#     --nth=2..
-#     --preview-window=down:10:wrap
-#     --preview='python -m draft get-preview {1}'
-#     --print0
-#     --print-query
-#     # TODO use the actual session id
-#     --bind 'start:execute-silent(python -m draft serve --session=2e715f13-1248-443f-ae0f-65d315ae9b18 &)+reload(python -m draft list-events)'
-#     --bind 'enter:become(python -m draft exit --index {1})'
-#     --bind 'esc:become(python -m draft exit --fail)'
-#     --bind 'ctrl-c:become(python -m draft exit --fail)'
-#     --bind 'tab:reload(python -m draft list-events --mode=next)'
-#     --bind 'shift-tab:reload(python -m draft list-events --mode=previous)'
-# )
-# unshare -r -n fzf $args
+export mode=${1:-all}  # - to select a mode, or: all, session, folder
+export query=${2:-}  # TODO query is not carried over when switching modes, escaping is a bit difficult
+[[ ! -v 3 ]]
 
-# export mode=${mode:-all}
+# TODO not sure yet how to pass those, shell is not the best for this
+export session=2e715f13-1248-443f-ae0f-65d315ae9b18
+export folder=/home/dkuettel
 
-# TODO could also just expand it when doing, or if we pipe anyway, even more clear
-export mode=${1:-all}
-
-args=(
+style=(
     --height=70%
     --min-height=10
-    --header-lines=1
-    # --query=${1:-}
-    --tiebreak=index
-    --scheme=history
-    # TODO --tac for reverse?
-    --read0
     --info=inline-right
     --highlight-line
-    --delimiter=\\x1f
-    --with-nth=4..
-    --nth=2..
     --preview-window=down:10:wrap
-    --preview='echo {3} | base64 --decode'
+    # NOTE --no-clear could be interesting, but flickering is not so bad now
+)
+
+if [[ $mode == - ]]; then
+    args=(
+        --delimiter=' '
+        --with-nth=1
+        --preview='print -- {2..}'
+    )
+    (
+        print -- 'all search in all of history'
+        print -- 'session search in the current session only'
+        print -- 'folder search in the current folder only'
+    ) | fzf $style $args --bind='enter:become:draft {1}'
+fi
+
+args=(
+    --prompt="$mode> "
+    --query=$query
+    --tiebreak=index
+    --scheme=history
+    --read0
+    --delimiter=\\x1f
+    --with-nth=3..
+    --nth=2..
+    --preview='echo {2} | base64 --decode'
     --print0
     --print-query
-    # TODO use the actual session id
-    # TODO pass session, folder, and other stuff via env of args?
-    --bind 'start:reload(python -m draft search --mode=$mode --session=2e715f13-1248-443f-ae0f-65d315ae9b18 --folder=/home/dkuettel)'
-    --bind 'enter:become(echo {2} | base64 --decode)'
-    # TODO looks like fzf blocks a reload until the previous one is done :/
-    # if we gotta stay with become, then make this a real pipe? does it react then? pipes are created immediately, right? so should be as fast as the start event now?
-    # but at this point, if we can make python startup fast enough, we could manage the mode switch there?
-    # its just said that we cannot do it with a reload :/ it can even now use the wrong current state, if it's still from the on-going reload
-    # for simplicity, it's just the only responsive way currently, so lets do it
-    # TODO is the problem that we work on old data for {1}, and otherwise its actually fast?
-    # --no-clear could make become without flicker, but reload is preferred
-    # TODO maybe instead just make a version that is a selector for mode, and tab goes to that menu, done, easy
-    # --bind 'tab:reload(python -m draft search --mode-after={1} --session=2e715f13-1248-443f-ae0f-65d315ae9b18 --folder=/home/dkuettel)'
-    --bind 'tab:become:draft-modes'
-    # --bind 'tab:become:mode={1} draft'
-    # --bind 'tab:abort+reload(python -m draft search --mode-after={1} --session=2e715f13-1248-443f-ae0f-65d315ae9b18 --folder=/home/dkuettel)'
-    # --bind 'shift-tab:reload(python -m draft search --mode-before={1} --session=2e715f13-1248-443f-ae0f-65d315ae9b18 --folder=/home/dkuettel)'
-    # --bind 'shift-tab:become:draft --mode-before={1}'
+    --bind 'start:reload:python -m draft search --mode=$mode --session=$session --folder=$folder'
+    --bind 'enter:become:echo {1} | base64 --decode'
+    --bind 'tab:become:draft -'
 )
-fzf $args
+fzf $style $args

@@ -1,8 +1,0 @@
-#!/bin/zsh
-set -eu -o pipefail
-
-(
-    print -- all
-    print -- session
-    print -- folder
-) | fzf --bind='enter:become:draft {1}'
