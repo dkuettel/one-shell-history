@@ -309,5 +309,10 @@ def search(
         print(entry_from_event(event, now, local_tz), end="\x00")
 
 
+# TODO previous event and next event for ctrl-p and co
+# TODO bagged stuff is not as good as before, allow filtering for failed and co? order by most recent?
+# TODO append event, and maybe new format?
+# TODO stats :)
+
 if __name__ == "__main__":
     app()
