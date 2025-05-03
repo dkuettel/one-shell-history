@@ -19,6 +19,7 @@ class Event(msgspec.Struct, frozen=True):
     timestamp: datetime
     command: str
     # TODO the typing doesnt show that either all of them are missing, or none, and in the future none are missing?
+    # TODO or we use a union top level
     duration: float | None = None
     exit_code: int | None = msgspec.field(name="exit-code", default=None)
     folder: str | None = None
@@ -29,6 +30,7 @@ class Event(msgspec.Struct, frozen=True):
 # TODO eventually we have to deal with a union, because there is more than one type of entry?
 # we dont actually now respect any change in format, maybe just dont support that anymore
 # make the extension, or the first line define the format, and that's it
+# or the top level entry is the thing the gives the version info, and we add to that in the future?
 class Entry(msgspec.Struct):
     event: Event | None = None
 

@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 set -eu -o pipefail
 
 export mode=${1:-all}  # - to select a mode, or: all, session, folder, bag
@@ -44,7 +44,7 @@ args=(
     --preview='echo {2} | base64 --decode'
     --print0
     --print-query
-    --bind 'start:reload:python -m draft search --mode=$mode --session=$session --folder=$folder'
+    --bind 'start:reload:uv run -- python -m draft search --mode=$mode --session=$session --folder=$folder'
     --bind 'enter:become:echo {1} | base64 --decode'
     --bind 'tab:become:draft -'
 )

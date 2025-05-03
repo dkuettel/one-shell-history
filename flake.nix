@@ -1,36 +1,119 @@
 {
-  description = "decals";
+  description = "one shell history";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-24.11";
+
+    # see https://pyproject-nix.github.io/uv2nix/usage/hello-world.html
+
+    pyproject-nix = {
+      url = "github:pyproject-nix/pyproject.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    uv2nix = {
+      url = "github:pyproject-nix/uv2nix";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    pyproject-build-systems = {
+      url = "github:pyproject-nix/build-system-pkgs";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.uv2nix.follows = "uv2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs }:
+  outputs = { self, nixpkgs, pyproject-nix, uv2nix, pyproject-build-systems, ... }@inputs:
     let
-      pkgs = import nixpkgs { system = "x86_64-linux"; };
-    in
-    rec {
-      # devShells.x86_64-linux.default = pkgs.mkShell {
-      #   packages = [
-      #     pkgs.python313
-      #     pkgs.uv
-      #     pkgs.ruff
-      #   ];
-      #   shellHook = "exec zsh";
-      # };
-      # packages.x86_64-linux.default = devShells.x86_64-linux.default;
-      env = pkgs.buildEnv {
+      inherit (nixpkgs) lib;
+      system = "x86_64-linux";
+      pkgs = nixpkgs.legacyPackages.${system};
+      prod-dependencies = with pkgs; [ fzf ];
+      nix-uv = pkgs.writeScriptBin "uv" ''
+        #!${pkgs.zsh}/bin/zsh
+        set -eu -o pipefail
+        UV_PYTHON=${pkgs.python313}/bin/python ${pkgs.uv}/bin/uv --no-python-downloads $@
+      '';
+      dev = pkgs.buildEnv {
         name = "dev";
-        paths = [
-          pkgs.python312
-          pkgs.uv
-          pkgs.ruff
-          pkgs.pyright
-          pkgs.stdenv.cc.cc.lib # for msgpack
-          pkgs.nodejs_22 # for copilot
-          pkgs.fzf
-        ];
+        # TODO util-linux  # for uuidgen
+        paths = [ nix-uv ] ++ (with pkgs; [ python313 ruff basedpyright ]) ++ prod-dependencies;
+        extraOutputsToInstall = [ "lib" ];
       };
-      packages.x86_64-linux.default = env;
+      workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
+      overlay = workspace.mkPyprojectOverlay {
+        sourcePreference = "wheel";
+      };
+      pyprojectOverrides = final: prev: {
+        # from https://github.com/TyberiusPrime/uv2nix_hammer_overrides/tree/main
+        # TODO but i dont understand why the right build system is not automatically used
+        # TODO also how can they download pypi stuff without needing hashes to be updated?
+        pprofile = prev.pprofile.overrideAttrs (old:
+          { nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ (final.resolveBuildSystem { setuptools = [ ]; }); }
+        );
+        pyprof2calltree = prev.pprofile.overrideAttrs (old:
+          { nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ (final.resolveBuildSystem { setuptools = [ ]; }); }
+        );
+      };
+      pythonSet =
+        (pkgs.callPackage pyproject-nix.build.packages {
+          python = pkgs.python313;
+        }).overrideScope
+          (
+            lib.composeManyExtensions [
+              pyproject-build-systems.overlays.default
+              overlay
+              pyprojectOverrides
+            ]
+          );
+      venv = pythonSet.mkVirtualEnv "osh-env" workspace.deps.default;
+      env = pkgs.buildEnv {
+        name = "osh env";
+        paths = [ venv ] ++ prod-dependencies;
+      };
+      app = pkgs.writeScriptBin "osh" ''
+        #!${pkgs.zsh}/bin/zsh
+        set -eu -o pipefail
+        path=(${env}/bin $path) python -m osh $@
+      '';
+    in
+    {
+      # > nix build .#name
+      packages.${system} = {
+        default = dev;
+        dev = dev;
+        app = app;
+        shell = self;  # TODO how to only add the ./share stuff here? now the full project is here for nothing
+      };
+
+      # > nix run .#name
+      apps.${system}.default = { type = "app"; program = "${app}/bin/osh"; };
+
+      # can be used in a configuration (?) (no default?)
+      # TODO this one could also add the app itself, no? why go thru packages above? ah but we dont know what user or wherever to add it
+      # TODO so then rename this to service?
+      nixosModules.osh = { config, ... }: {
+        options = { };
+        config = {
+          systemd.user.services.osh = {
+            enable = true;
+            wantedBy = [ "default.target" ];
+            description = "osh - one shell history";
+            path = [ app ];
+            serviceConfig = {
+              Type = "notify";
+              NotifyAccess = "all";
+              # TODO had PYTHONUNBUFFERED=1 to see the log, but is that a good idea?
+              # TODO now we should not have the bin/osh anymore, right? instead a ./dev folder? with edit in it?
+              # TODO strange that here the path is not ready yet, so we need the full path for osh?
+              ExecStart = "${app}/bin/osh run-server";
+              ExecStop = "${app}/bin/osh stop-server --systemd";
+            };
+          };
+        };
+      };
+
     };
 }
