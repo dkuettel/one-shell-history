@@ -1,13 +1,19 @@
 #!/usr/bin/env zsh
 set -eu -o pipefail
 
-export mode=${1:-all}  # - to select a mode, or: all, session, folder, bag
-export query=${2:-}  # TODO query is not carried over when switching modes, escaping is a bit difficult
-[[ ! -v 3 ]]
+# TODO do we need to mark them for export again?
+# input env vars
+# mode: -, all, session, folder, bag
+#   "-" will show mode selection
+# query: initial query
+# session
+# session_start  TODO is that needed here?
+# folder
 
-# TODO not sure yet how to pass those, shell is not the best for this
-export session=2e715f13-1248-443f-ae0f-65d315ae9b18
-export folder=/home/dkuettel
+[[ $# == 0 ]]
+
+# export query=${2:-}  # TODO query is not carried over when switching modes, escaping is a bit difficult
+# but fzf probably can give it with one of {q} or so? does fzf have a solution for escaping there?
 
 style=(
     --height=70%
@@ -29,7 +35,7 @@ if [[ $mode == - ]]; then
         print -- 'session search in the current session only'
         print -- 'folder search in the current folder only'
         print -- 'bag search an aggregated view of all unique commands in all of history, forever, always.'
-    ) | fzf $style $args --bind='enter:become:draft {1}'
+    ) | fzf $style $args --bind='enter:become:mode={1} osh-fzf'
 fi
 
 args=(
@@ -44,8 +50,8 @@ args=(
     --preview='echo {2} | base64 --decode'
     --print0
     --print-query
-    --bind 'start:reload:uv run -- python -m draft search --mode=$mode --session=$session --folder=$folder'
+    --bind 'start:reload:osh search --mode=$mode --session=$session --folder=$folder'
     --bind 'enter:become:echo {1} | base64 --decode'
-    --bind 'tab:become:draft -'
+    --bind 'tab:become:mode=- osh-fzf'
 )
 fzf $style $args

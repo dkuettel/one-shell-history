@@ -30,3 +30,5 @@ build-backend = "hatchling.build"
 
 [tool.pyright]
 include = ["src"]
+typeCheckingMode = "standard"
+# typeCheckingMode = "recommended"
