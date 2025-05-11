@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from base64 import b64encode
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
 from enum import Enum
@@ -80,6 +80,24 @@ def load_osh_histories(base: Path) -> list[Event]:
     ]
 
 
+entry_decoder = msgspec.json.Decoder(type=Entry)
+list_decoder = msgspec.msgpack.Decoder(type=list[Event])
+
+
+def read_osh_file(path: Path) -> Iterator[Event]:
+    for i in entry_decoder.decode_lines(path.read_text()):
+        if i.event is not None:
+            yield i.event
+
+
+def read_msgpack_file(path: Path) -> Iterator[Event]:
+    yield from list_decoder.decode(path.read_bytes())
+
+
+def write_msgpack(events: list[Event], path: Path):
+    path.write_bytes(msgspec.msgpack.encode(events))
+
+
 event_pattern = re.compile(r"^: (?P<timestamp>\d+):(?P<duration>\d+);(?P<command>.*)$")
 
 
@@ -154,17 +172,63 @@ def load_legacy(base: Path) -> list[Event]:
     return events
 
 
-def load_history(base: Path) -> list[Event]:
+def find_sources(base: Path) -> set[Path]:
+    sources = {
+        *base.rglob("*.osh_legacy"),
+        *base.rglob("*.zsh_history"),
+        *base.rglob("*.osh"),
+    }
+
+    def f(source: Path) -> Path:
+        alt = source.with_suffix(source.suffix + ".msgpack")
+        if alt.exists():
+            return alt
+        return source
+
+    sources = {f(source) for source in sources}
+    return sources
+
+
+def load_source(path: Path) -> Iterator[Event]:
+    match path.suffix:
+        case ".osh_legacy":
+            # TODO but is that gonna be reverse?
+            yield from read_osh_legacy_file(path)
+        case ".zsh_history":
+            # TODO but is that gonna be reverse?
+            yield from read_zsh_file(path)
+        case ".osh":
+            # TODO but is that gonna be reverse?
+            yield from read_osh_file(path)
+        case ".msgpack":
+            # TODO but is that gonna be reverse?
+            yield from read_msgpack_file(path)
+        case _ as never:
+            assert False, never
+
+
+# TODO maybe base should be absolute already
+def load_history(base: Path) -> Iterator[Event]:
     """history is from new to old, first entry is the most recent"""
-    events = load_osh_histories(base) + load_zsh(base) + load_legacy(base)
-    events = sorted(events, key=lambda e: e.timestamp, reverse=True)
+    sources = find_sources(base)
+    # TODO there is a way to list rglob and get stat() at the same time?
+    sources = sorted(sources, key=lambda path: path.stat().st_mtime, reverse=True)
+    # TODO already much faster to first event, but currently cheating, not reverse? maybe only best effort, just all data, not necessarily any reverse
+    # TODO in fact we might already be at python's overhead time, removing all but the new format gives the same time, 0.09s, could be fine already
+    # haha ok no that was stupid. we only yield, so we never go and open any other file, so it can't make a difference of course
+    # TODO now lets rewrite old formats automatically when we encounter them and use the same name, and then skip if there is a newer one with a fitting name?
+    for source in sources:
+        yield from load_source(source)
+    # events = load_osh_histories(base) + load_zsh(base) + load_legacy(base)
+    # TODO on this test data, sorting makes hardly any impact
+    # events = sorted(events, key=lambda e: e.timestamp, reverse=True)
 
     # TODO msgspec is actually super fast, json is already good compared to pickle
     # and msgpack seems even a bit faster
     # so we could make the source format already this way, and we could cache things
     # we have a class cache state, and maybe even know where to continue reading active files, if needed
 
-    return events
+    # return events
 
 
 def human_duration(dt: timedelta | float) -> str:
@@ -323,13 +387,27 @@ def search(
     local_tz = now.tzinfo
     assert local_tz is not None
 
-    for event in events:
-        print(entry_from_event(event, now, local_tz), end="\x00")
+    # for event in events:
+    #     print(entry_from_event(event, now, local_tz), end="\x00")
+    print("first", next(iter(events)))
 
 
 @app.command("append-event")
 def append_event():
     pass
+
+
+@app.command("convert")
+def app_convert():
+    base = Path("test-data")
+    sources = find_sources(base)
+    for source in sources:
+        match source.suffix:
+            case ".msgpack":
+                pass
+            case _:
+                events = list(load_source(source))
+                write_msgpack(events, source.with_suffix(source.suffix + ".msgpack"))
 
 
 @app.command("test")
