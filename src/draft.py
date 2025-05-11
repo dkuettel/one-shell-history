@@ -7,7 +7,6 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
 from enum import Enum
-from io import BytesIO
 from pathlib import Path
 from typing import assert_never
 
@@ -91,7 +90,7 @@ def read_osh_file(path: Path) -> Iterator[Event]:
 
 
 def read_msgpack_file(path: Path) -> Iterator[Event]:
-    yield from list_decoder.decode(path.read_bytes())
+    yield from reversed(list_decoder.decode(path.read_bytes()))
 
 
 def write_msgpack(events: list[Event], path: Path):
@@ -192,16 +191,15 @@ def find_sources(base: Path) -> set[Path]:
 def load_source(path: Path) -> Iterator[Event]:
     match path.suffix:
         case ".osh_legacy":
-            # TODO but is that gonna be reverse?
+            # TODO but is that gonna be reverse? not yet
             yield from read_osh_legacy_file(path)
         case ".zsh_history":
-            # TODO but is that gonna be reverse?
+            # TODO but is that gonna be reverse? not yet
             yield from read_zsh_file(path)
         case ".osh":
-            # TODO but is that gonna be reverse?
+            # TODO but is that gonna be reverse? not yet
             yield from read_osh_file(path)
         case ".msgpack":
-            # TODO but is that gonna be reverse?
             yield from read_msgpack_file(path)
         case _ as never:
             assert False, never
@@ -212,6 +210,8 @@ def load_history(base: Path) -> Iterator[Event]:
     """history is from new to old, first entry is the most recent"""
     sources = find_sources(base)
     # TODO there is a way to list rglob and get stat() at the same time?
+    # TODO could still check how easy it is to load reversely now and merge sort? slower overall, but faster time to first result?
+    # TODO especially if we can do it in parallel threaded or so, new python abilities to use here?
     sources = sorted(sources, key=lambda path: path.stat().st_mtime, reverse=True)
     # TODO already much faster to first event, but currently cheating, not reverse? maybe only best effort, just all data, not necessarily any reverse
     # TODO in fact we might already be at python's overhead time, removing all but the new format gives the same time, 0.09s, could be fine already
@@ -379,7 +379,7 @@ def search(
             if folder is not None:
                 events = [e for e in events if e.folder == folder]
         case Mode.bag:
-            events = bagged_events(events)
+            events = bagged_events(list(events))
         case _ as never:
             assert_never(never)
 
@@ -387,9 +387,8 @@ def search(
     local_tz = now.tzinfo
     assert local_tz is not None
 
-    # for event in events:
-    #     print(entry_from_event(event, now, local_tz), end="\x00")
-    print("first", next(iter(events)))
+    for event in events:
+        print(entry_from_event(event, now, local_tz), end="\x00")
 
 
 @app.command("append-event")
