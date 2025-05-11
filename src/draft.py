@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
 from enum import Enum
+from io import BytesIO
 from pathlib import Path
 from typing import assert_never
 
@@ -31,8 +32,41 @@ class Event(msgspec.Struct, frozen=True):
 # we dont actually now respect any change in format, maybe just dont support that anymore
 # make the extension, or the first line define the format, and that's it
 # or the top level entry is the thing the gives the version info, and we add to that in the future?
+# the v1 top level thing is very good to make it safe for later additions, and easy to parse
+# but how to make it robust to the higher level streaming thing?
+# i want to see that we can read it backwards maybe? or save parts already backwards? maybe not that one.
+# could we literally reverse the bytes? what does msgpack do when it gets too much data, just stop?
+# otherwise we save 2 messages, the real one, and a size? and then we can read backwards?
+# not quite, if the size is a message to, how can we read that one backwards, would have to be my own int thing
+# but then that is a fixed top-level format that we cannot just change now, and we need a new fileformat if we want to change that
 class Entry(msgspec.Struct):
     event: Event | None = None
+
+
+class NewEvent(msgspec.Struct, frozen=True):
+    timestamp: datetime
+    command: str
+    duration: float
+    exit_code: int
+    folder: str
+    machine: str
+    session: str
+
+
+# TODO should not forget that we need to look at locking when multiple appends
+# and even more so when adapting/compacting when loading
+
+
+# TODO and we try to make sequences of binary msgpack entries, lets try if we can load them streaming, or if we need to wrap things somehow?
+# streaming is not supported by msgspec, the messages are not self-delimiting
+# so we need to built it one level higher, the question here is if my data has a size that will make this slower?
+# do we want to easy append, or easy load?
+# or maybe if we are lucky, then a list is just appending?
+# no :/, a list seems to know its length, so we cant cheat it
+# the data seems so small that maybe a single message as a list is good enough and we benefit from native code?
+# will still be fun to try the reverse streaming on as well
+class NewEntry(msgspec.Struct, frozen=True):
+    v1: NewEvent
 
 
 def load_osh_histories(base: Path) -> list[Event]:
@@ -260,24 +294,6 @@ class Mode(Enum):
 app = Typer(pretty_exceptions_enable=False)
 
 
-# TODO try for aggregation
-@app.command()
-def frames():
-    import pandas
-
-    base = Path("test-large")
-    [source] = list(base.rglob("*.osh"))
-    df = pandas.read_json(source, lines=True)
-    print(df)
-
-    # NOTE this seems definitely slower
-    # but for certain things dataframes are nice, aggregation
-    # so we might still use it, but not for loading?
-    # unless we make the format better for pandas?
-    # speed was actually faster when loading with msgspec and then passing to dataframes
-    # but need to properly unpack into columns
-
-
 @app.command()
 def search(
     mode: Mode | None = None,
@@ -309,6 +325,28 @@ def search(
 
     for event in events:
         print(entry_from_event(event, now, local_tz), end="\x00")
+
+
+@app.command("append-event")
+def append_event():
+    pass
+
+
+@app.command("test")
+def app_test():
+    buf = bytearray()
+    encoder = msgspec.msgpack.Encoder()
+    for i in range(2):
+        encoder.encode_into(i, buf, len(buf))
+    print(buf)
+    buf = bytearray()
+    encoder.encode_into([1, 2], buf, len(buf))
+    print(buf)
+    buf = bytearray()
+    encoder.encode_into([1, 2, 3], buf, len(buf))
+    print(buf)
+    decoder = msgspec.msgpack.Decoder(list[int])
+    print(decoder.decode(buf))
 
 
 # TODO bagged stuff is not as good as before, allow filtering for failed and co? order by most recent?
