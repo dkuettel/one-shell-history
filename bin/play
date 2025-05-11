@@ -1,0 +1,4 @@
+#!/usr/bin/env zsh
+set -eux -o pipefail
+
+path=(${0:a:h:h}/dev $path) query= mode=all session=x folder=/ ${0:a:h:h}/dev/osh-fzf
