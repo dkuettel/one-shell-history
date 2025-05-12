@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from base64 import b64encode
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
@@ -359,7 +360,7 @@ app = Typer(pretty_exceptions_enable=False)
 
 
 @app.command()
-def search(
+def app_search(
     mode: Mode | None = None,
     session: str | None = None,
     folder: str | None = None,
@@ -391,6 +392,26 @@ def search(
         print(entry_from_event(event, now, local_tz), end="\x00")
 
 
+@app.command("bench")
+def app_bench():
+    start = time.perf_counter()
+    events = load_history(Path("test-data"))
+    now = datetime.now().astimezone()
+    local_tz = now.tzinfo
+    assert local_tz is not None
+    print(len(entry_from_event(next(events), now, local_tz)))
+    first = time.perf_counter()
+    print(f"first after {(first-start)*1000:_}ms")
+    print(sum(len(entry_from_event(event, now, local_tz)) for event in events))
+    last = time.perf_counter()
+    print(f"rest after {(last-first)*1000:_}ms")
+
+
+@app.command("nop")
+def app_nop():
+    pass
+
+
 @app.command("append-event")
 def append_event():
     pass
@@ -407,23 +428,6 @@ def app_convert():
             case _:
                 events = list(load_source(source))
                 write_msgpack(events, source.with_suffix(source.suffix + ".msgpack"))
-
-
-@app.command("test")
-def app_test():
-    buf = bytearray()
-    encoder = msgspec.msgpack.Encoder()
-    for i in range(2):
-        encoder.encode_into(i, buf, len(buf))
-    print(buf)
-    buf = bytearray()
-    encoder.encode_into([1, 2], buf, len(buf))
-    print(buf)
-    buf = bytearray()
-    encoder.encode_into([1, 2, 3], buf, len(buf))
-    print(buf)
-    decoder = msgspec.msgpack.Decoder(list[int])
-    print(decoder.decode(buf))
 
 
 # TODO bagged stuff is not as good as before, allow filtering for failed and co? order by most recent?

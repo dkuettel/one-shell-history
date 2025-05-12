@@ -1,0 +1,4 @@
+#!/usr/bin/env zsh
+set -eux -o pipefail
+
+tmux split-window -v iloop run -- play
