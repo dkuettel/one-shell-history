@@ -9,10 +9,18 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
 from enum import Enum
 from pathlib import Path
-from typing import assert_never
+from queue import SimpleQueue
+from threading import Thread
+from typing import Literal, assert_never
 
 import msgspec
 from typer import Typer
+
+
+class Order(Enum):
+    recent_first = "recent first"
+    recent_last = "recent last"
+    any = "any"
 
 
 # TODO discuss with yves a new format?
@@ -207,8 +215,7 @@ def load_source(path: Path) -> Iterator[Event]:
 
 
 # TODO maybe base should be absolute already
-def load_history(base: Path) -> Iterator[Event]:
-    """history is from new to old, first entry is the most recent"""
+def load_history(base: Path, order: Literal[Order.recent_first]) -> Iterator[Event]:
     sources = find_sources(base)
     # TODO there is a way to list rglob and get stat() at the same time?
     # TODO could still check how easy it is to load reversely now and merge sort? slower overall, but faster time to first result?
@@ -229,7 +236,35 @@ def load_history(base: Path) -> Iterator[Event]:
     # so we could make the source format already this way, and we could cache things
     # we have a class cache state, and maybe even know where to continue reading active files, if needed
 
-    # return events
+
+def threaded_worker(path: Path, queue: SimpleQueue[Event | None]):
+    for event in load_source(path):
+        queue.put(event)
+    queue.put(None)
+
+
+def load_history_threaded(
+    base: Path, order: Literal[Order.recent_first]
+) -> Iterator[Event]:
+    """total is the same, but time to first is slower"""
+    sources = find_sources(base)
+    queue: SimpleQueue[Event | None] = SimpleQueue()
+    threads = [
+        Thread(target=threaded_worker, args=(source, queue)) for source in sources
+    ]
+    for thread in threads:
+        thread.start()
+    none_count = 0
+    while none_count < len(sources):
+        match queue.get():
+            case Event() as event:
+                yield event
+            case None:
+                none_count = none_count + 1
+            case _ as never:
+                assert_never(never)
+    for thread in threads:
+        thread.join()
 
 
 def human_duration(dt: timedelta | float) -> str:
@@ -368,7 +403,7 @@ def app_search(
     if mode is None:
         mode = Mode.all
 
-    events = load_history(Path("test-data"))
+    events = load_history(Path("test-data"), Order.recent_first)
 
     match mode:
         case Mode.all:
@@ -395,7 +430,8 @@ def app_search(
 @app.command("bench")
 def app_bench():
     start = time.perf_counter()
-    events = load_history(Path("test-data"))
+    # events = load_history(Path("test-data"), Order.recent_first)
+    events = load_history_threaded(Path("test-data"), Order.recent_first)
     now = datetime.now().astimezone()
     local_tz = now.tzinfo
     assert local_tz is not None
