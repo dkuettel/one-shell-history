@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import multiprocessing as mp
 import re
 import time
 from base64 import b64encode
@@ -267,6 +268,34 @@ def load_history_threaded(
         thread.join()
 
 
+def process_worker(path: Path, queue: mp.Queue[Event | None]):
+    for event in load_source(path):
+        queue.put(event)
+    queue.put(None)
+
+
+def load_history_mp(base: Path, order: Literal[Order.recent_first]) -> Iterator[Event]:
+    """first almost with no parallel at all, but total much slower. should send in bigger packs?"""
+    sources = find_sources(base)
+    queue: mp.Queue[Event | None] = mp.Queue()
+    processes = [
+        mp.Process(target=process_worker, args=(source, queue)) for source in sources
+    ]
+    for process in processes:
+        process.start()
+    none_count = 0
+    while none_count < len(sources):
+        match queue.get():
+            case Event() as event:
+                yield event
+            case None:
+                none_count = none_count + 1
+            case _ as never:
+                assert_never(never)
+    for process in processes:
+        process.join()
+
+
 def human_duration(dt: timedelta | float) -> str:
     match dt:
         case timedelta():
@@ -431,7 +460,8 @@ def app_search(
 def app_bench():
     start = time.perf_counter()
     # events = load_history(Path("test-data"), Order.recent_first)
-    events = load_history_threaded(Path("test-data"), Order.recent_first)
+    # events = load_history_threaded(Path("test-data"), Order.recent_first)
+    events = load_history_mp(Path("test-data"), Order.recent_first)
     now = datetime.now().astimezone()
     local_tz = now.tzinfo
     assert local_tz is not None
