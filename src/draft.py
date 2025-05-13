@@ -459,6 +459,8 @@ def app_search(
 @app.command("bench")
 def app_bench():
     start = time.perf_counter()
+    # looks like doing parallel doesnt help much, building objects is maybe the most expensive part?
+    # and then anything that has to push that stuff thru a queue has some overhead on that? maybe with sorting it could still help
     # events = load_history(Path("test-data"), Order.recent_first)
     # events = load_history_threaded(Path("test-data"), Order.recent_first)
     events = load_history_mp(Path("test-data"), Order.recent_first)
