@@ -18,12 +18,6 @@ import msgspec
 from typer import Typer
 
 
-class Order(Enum):
-    recent_first = "recent first"
-    recent_last = "recent last"
-    any = "any"
-
-
 # TODO discuss with yves a new format?
 class Event(msgspec.Struct, frozen=True):
     timestamp: datetime
@@ -216,18 +210,42 @@ def load_source(path: Path) -> Iterator[Event]:
 
 
 # TODO maybe base should be absolute already
-def load_history(base: Path, order: Literal[Order.recent_first]) -> Iterator[Event]:
-    sources = find_sources(base)
+def load_history(base: Path) -> Iterator[Event]:
+    active_sources = find_sources(base / "active")
+    archived_sources = find_sources(base / "archive")
     # TODO there is a way to list rglob and get stat() at the same time?
     # TODO could still check how easy it is to load reversely now and merge sort? slower overall, but faster time to first result?
     # TODO especially if we can do it in parallel threaded or so, new python abilities to use here?
-    sources = sorted(sources, key=lambda path: path.stat().st_mtime, reverse=True)
+    active_sources = sorted(
+        active_sources,
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
     # TODO already much faster to first event, but currently cheating, not reverse? maybe only best effort, just all data, not necessarily any reverse
     # TODO in fact we might already be at python's overhead time, removing all but the new format gives the same time, 0.09s, could be fine already
     # haha ok no that was stupid. we only yield, so we never go and open any other file, so it can't make a difference of course
     # TODO now lets rewrite old formats automatically when we encounter them and use the same name, and then skip if there is a newer one with a fitting name?
-    for source in sources:
+    for source in active_sources:
         yield from load_source(source)
+
+    archived_mtime = max(path.stat().st_mtime for path in archived_sources)
+
+    cached_source = base / "archived.osh.msgpack"
+    if not cached_source.exists() or cached_source.stat().st_mtime < archived_mtime:
+        archived = [
+            event for source in archived_sources for event in load_source(source)
+        ]
+        archived = sorted(
+            archived,
+            key=lambda e: e.timestamp,
+            reverse=True,
+        )
+        write_msgpack(archived, cached_source)
+    else:
+        archived = load_source(cached_source)
+
+    yield from archived
+
     # events = load_osh_histories(base) + load_zsh(base) + load_legacy(base)
     # TODO on this test data, sorting makes hardly any impact
     # events = sorted(events, key=lambda e: e.timestamp, reverse=True)
@@ -244,9 +262,7 @@ def threaded_worker(path: Path, queue: SimpleQueue[Event | None]):
     queue.put(None)
 
 
-def load_history_threaded(
-    base: Path, order: Literal[Order.recent_first]
-) -> Iterator[Event]:
+def load_history_threaded(base: Path) -> Iterator[Event]:
     """total is the same, but time to first is slower"""
     sources = find_sources(base)
     queue: SimpleQueue[Event | None] = SimpleQueue()
@@ -274,7 +290,7 @@ def process_worker(path: Path, queue: mp.Queue[Event | None]):
     queue.put(None)
 
 
-def load_history_mp(base: Path, order: Literal[Order.recent_first]) -> Iterator[Event]:
+def load_history_mp(base: Path) -> Iterator[Event]:
     """first almost with no parallel at all, but total much slower. should send in bigger packs?"""
     sources = find_sources(base)
     queue: mp.Queue[Event | None] = mp.Queue()
@@ -432,7 +448,7 @@ def app_search(
     if mode is None:
         mode = Mode.all
 
-    events = load_history(Path("test-data"), Order.recent_first)
+    events = load_history(Path("test-data"))
 
     match mode:
         case Mode.all:
@@ -461,9 +477,9 @@ def app_bench():
     start = time.perf_counter()
     # looks like doing parallel doesnt help much, building objects is maybe the most expensive part?
     # and then anything that has to push that stuff thru a queue has some overhead on that? maybe with sorting it could still help
-    # events = load_history(Path("test-data"), Order.recent_first)
-    # events = load_history_threaded(Path("test-data"), Order.recent_first)
-    events = load_history_mp(Path("test-data"), Order.recent_first)
+    events = load_history(Path("test-data"))
+    # events = load_history_threaded(Path("test-data"))
+    # events = load_history_mp(Path("test-data"))
     now = datetime.now().astimezone()
     local_tz = now.tzinfo
     assert local_tz is not None
