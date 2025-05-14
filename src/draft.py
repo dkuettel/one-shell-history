@@ -259,8 +259,14 @@ def load_history(base: Path) -> Iterator[Event]:
     # TODO in fact we might already be at python's overhead time, removing all but the new format gives the same time, 0.09s, could be fine already
     # haha ok no that was stupid. we only yield, so we never go and open any other file, so it can't make a difference of course
     # TODO now lets rewrite old formats automatically when we encounter them and use the same name, and then skip if there is a newer one with a fitting name?
-    for source in active_sources:
+    # TODO streamed msgspec is super fast for first, but a bit slower overall, but easy to append
+    # TODO but just plain msgspec is still only 3ms to first, and still fast for overall ... might just be the easier solution for now
+    # that is total 1000ms vs 800ms, probably not worth it just for that for the streaming
+    # but the question is how do we append, and that is the more-often operation, just appending there would be very nice
+    # loading in one msgspec call is really beautifully fast for now ... we could compact it on every read, but only append on append?
+    for source in active_sources[:1]:
         yield from load_source(source)
+    return
 
     archived_mtime = max(path.stat().st_mtime for path in archived_sources)
 
@@ -536,19 +542,39 @@ def append_event():
 
 
 @app.command("convert")
-def app_convert(path: Path):
-    match path.suffixes:
-        case [".osh", ".msgpack", ".stream"]:
-            pass
-        case _:
-            # TODO well, not clear, maybe just sort anyway?
-            events = list(reversed(list(load_source(path))))
-            write_msgpack_stream_file(
-                events,
-                path.with_name(
-                    path.name[: -sum(map(len, path.suffixes))] + ".osh.msgpack.stream"
-                ),
-            )
+def app_convert(paths: list[Path]):
+    for path in paths:
+        match path.suffixes:
+            case [".osh", ".msgpack"]:
+                pass
+            case _:
+                events = list(load_source(path))
+                write_msgpack_file(
+                    events,
+                    path.with_name(
+                        path.name[: -sum(map(len, path.suffixes))] + ".osh.msgpack"
+                    ),
+                )
+                path.unlink()
+
+
+@app.command("convert-stream")
+def app_convert_stream(paths: list[Path]):
+    for path in paths:
+        match path.suffixes:
+            case [".osh", ".msgpack", ".stream"]:
+                pass
+            case _:
+                # TODO well, not clear, maybe just sort anyway?
+                events = list(reversed(list(load_source(path))))
+                write_msgpack_stream_file(
+                    events,
+                    path.with_name(
+                        path.name[: -sum(map(len, path.suffixes))]
+                        + ".osh.msgpack.stream"
+                    ),
+                )
+                path.unlink()
 
 
 # TODO bagged stuff is not as good as before, allow filtering for failed and co? order by most recent?
