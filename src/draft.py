@@ -193,17 +193,17 @@ def find_sources(base: Path) -> set[Path]:
 
 
 def load_source(path: Path) -> Iterator[Event]:
-    match path.suffix:
-        case ".osh_legacy":
+    match path.suffixes:
+        case [".osh_legacy"]:
             # TODO but is that gonna be reverse? not yet
             yield from read_osh_legacy_file(path)
-        case ".zsh_history":
+        case [".zsh_history"]:
             # TODO but is that gonna be reverse? not yet
             yield from read_zsh_file(path)
-        case ".osh":
+        case [".osh"]:
             # TODO but is that gonna be reverse? not yet
             yield from read_osh_file(path)
-        case ".msgpack":
+        case [".osh", ".msgpack"]:
             yield from read_msgpack_file(path)
         case _ as never:
             assert False, never
