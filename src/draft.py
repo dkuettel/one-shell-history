@@ -210,15 +210,17 @@ def find_sources(base: Path) -> set[Path]:
         *base.rglob("*.osh_legacy"),
         *base.rglob("*.zsh_history"),
         *base.rglob("*.osh"),
+        *base.rglob("*.osh.msgpack"),
+        *base.rglob("*.osh.msgpack.stream"),
     }
 
-    def f(source: Path) -> Path:
-        alt = source.with_suffix(source.suffix + ".msgpack")
-        if alt.exists():
-            return alt
-        return source
-
-    sources = {f(source) for source in sources}
+    # def f(source: Path) -> Path:
+    #     alt = source.with_suffix(source.suffix + ".msgpack")
+    #     if alt.exists():
+    #         return alt
+    #     return source
+    #
+    # sources = {f(source) for source in sources}
     return sources
 
 
@@ -235,6 +237,8 @@ def load_source(path: Path) -> Iterator[Event]:
             yield from read_osh_file(path)
         case [".osh", ".msgpack"]:
             yield from read_msgpack_file(path)
+        case [".osh", ".msgpack", ".stream"]:
+            yield from read_msgpack_stream_file(path)
         case _ as never:
             assert False, never
 
