@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import multiprocessing as mp
+import os
 import re
 import time
 from base64 import b64encode
@@ -89,6 +90,7 @@ class OshMsgpack(msgspec.Struct, frozen=True, tag_field="version", tag="v1"):
 
 entry_decoder = msgspec.json.Decoder(type=Entry)
 msgpack_decoder = msgspec.msgpack.Decoder(type=OshMsgpack)
+msgpack_stream_decoder = msgspec.msgpack.Decoder(type=Event)
 
 
 def read_osh_file(path: Path) -> Iterator[Event]:
@@ -103,6 +105,30 @@ def read_msgpack_file(path: Path) -> Iterator[Event]:
 
 def write_msgpack_file(events: list[Event], path: Path):
     path.write_bytes(msgspec.msgpack.encode(OshMsgpack(events)))
+
+
+def write_msgpack_stream_file(events: list[Event], path: Path):
+    # TODO we assume events are most recent first, and we reverse it, so it's ready to be read and appended to
+    events = list(reversed(events))
+    # TODO how about versioning then, we need a tag here too?
+    encoder = msgspec.msgpack.Encoder()
+    with path.open("wb") as f:
+        for event in events:
+            data = encoder.encode(event)
+            size = len(data)
+            f.write(data)
+            f.write(size.to_bytes(length=2, byteorder="big", signed=False))
+
+
+def read_msgpack_stream_file(path: Path) -> Iterator[Event]:
+    with path.open("rb") as f:
+        f.seek(0, os.SEEK_END)
+        while f.tell() > 0:
+            f.seek(-2, os.SEEK_CUR)
+            size = int.from_bytes(f.read(2), byteorder="big", signed=False)
+            f.seek(-2 - size, os.SEEK_CUR)
+            yield msgpack_stream_decoder.decode(f.read(size))
+            f.seek(-size, os.SEEK_CUR)
 
 
 event_pattern = re.compile(r"^: (?P<timestamp>\d+):(?P<duration>\d+);(?P<command>.*)$")
@@ -508,11 +534,17 @@ def append_event():
 @app.command("convert")
 def app_convert(path: Path):
     match path.suffixes:
-        case [".osh", ".msgpack"]:
+        case [".osh", ".msgpack", ".stream"]:
             pass
         case _:
-            events = list(load_source(path))
-            write_msgpack_file(events, path.with_suffix(".osh.msgpack"))
+            # TODO well, not clear, maybe just sort anyway?
+            events = list(reversed(list(load_source(path))))
+            write_msgpack_stream_file(
+                events,
+                path.with_name(
+                    path.name[: -sum(map(len, path.suffixes))] + ".osh.msgpack.stream"
+                ),
+            )
 
 
 # TODO bagged stuff is not as good as before, allow filtering for failed and co? order by most recent?
