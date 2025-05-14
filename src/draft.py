@@ -83,8 +83,12 @@ def load_osh_histories(base: Path) -> list[Event]:
     ]
 
 
+class OshMsgpack(msgspec.Struct, frozen=True, tag_field="version", tag="v1"):
+    events: list[Event]
+
+
 entry_decoder = msgspec.json.Decoder(type=Entry)
-list_decoder = msgspec.msgpack.Decoder(type=list[Event])
+msgpack_decoder = msgspec.msgpack.Decoder(type=OshMsgpack)
 
 
 def read_osh_file(path: Path) -> Iterator[Event]:
@@ -94,11 +98,11 @@ def read_osh_file(path: Path) -> Iterator[Event]:
 
 
 def read_msgpack_file(path: Path) -> Iterator[Event]:
-    yield from reversed(list_decoder.decode(path.read_bytes()))
+    yield from reversed(msgpack_decoder.decode(path.read_bytes()).events)
 
 
-def write_msgpack(events: list[Event], path: Path):
-    path.write_bytes(msgspec.msgpack.encode(events))
+def write_msgpack_file(events: list[Event], path: Path):
+    path.write_bytes(msgspec.msgpack.encode(OshMsgpack(events)))
 
 
 event_pattern = re.compile(r"^: (?P<timestamp>\d+):(?P<duration>\d+);(?P<command>.*)$")
@@ -240,7 +244,7 @@ def load_history(base: Path) -> Iterator[Event]:
             key=lambda e: e.timestamp,
             reverse=True,
         )
-        write_msgpack(archived, cached_source)
+        write_msgpack_file(archived, cached_source)
     else:
         archived = load_source(cached_source)
 
@@ -502,16 +506,13 @@ def append_event():
 
 
 @app.command("convert")
-def app_convert():
-    base = Path("test-data")
-    sources = find_sources(base)
-    for source in sources:
-        match source.suffix:
-            case ".msgpack":
-                pass
-            case _:
-                events = list(load_source(source))
-                write_msgpack(events, source.with_suffix(source.suffix + ".msgpack"))
+def app_convert(path: Path):
+    match path.suffixes:
+        case [".osh", ".msgpack"]:
+            pass
+        case _:
+            events = list(load_source(path))
+            write_msgpack_file(events, path.with_suffix(".osh.msgpack"))
 
 
 # TODO bagged stuff is not as good as before, allow filtering for failed and co? order by most recent?
