@@ -21,14 +21,18 @@ from typer import Typer
 
 # TODO discuss with yves a new format?
 # NOTE using tag fields so we can potentially use unions later and update the data version
+# TODO seems much bigger than the original data, because of the none default values? at least when checking on how archive gets bundled
 class PackedOshEvent(msgspec.Struct, frozen=True, tag_field="version", tag="v1"):
     # TODO could save this as an easy thing, good enough for sorting, and only make smart when needed?
     # TODO or we could sort on the string too? float or big int would be better
     # TODO maybe assert self.timestamp.tzinfo is datetime.timezone.utc ?
     # TODO some have only second resolution here (just like duration)
-    timestamp: datetime
+    # TODO could use year, month, ... just the input to datetime, and make clear it is utc. then ordering is almost native. tuple vs not?
+    timestamp: datetime  # utc
+
     command: str
-    duration: None | int | float
+
+    duration: None | int | float  # seconds
     exit_code: None | int
     folder: None | str
     machine: None | str
@@ -58,6 +62,9 @@ def write_streamed_packed_osh_events(
         for event in forward_events:
             data = encoder.encode(event)
             count = len(data)
+            # TODO need to think about the maximum size here, ran into it at last once with 2 bytes now
+            if count > 2**16:
+                continue
             f.write(data)
             f.write(count.to_bytes(length=2, byteorder="big", signed=False))
 
@@ -242,7 +249,7 @@ def read_events_backward(path: Path) -> Iterator[PackedOshEvent]:
 
 
 # TODO maybe base should be absolute already
-def load_history(base: Path) -> Iterator[PackedOshEvent]:
+def read_events_from_base(base: Path) -> Iterator[PackedOshEvent]:
     active_sources = find_sources(base / "active")
     archived_sources = find_sources(base / "archive")
     # TODO could still check how easy it is to load reversely now and merge sort? slower overall, but faster time to first result?
@@ -269,7 +276,10 @@ def load_history(base: Path) -> Iterator[PackedOshEvent]:
 
     archived_mtime = max(path.stat().st_mtime for path in archived_sources)
 
-    cached_source = base / "archived.osh.msgpack"
+    # TODO hmm batched vs stream didnt see a difference, but maybe just because of the long list to format?
+    # TODO lets measure loading time only?
+    # cached_source = base / "archived.osh.msgpack"
+    cached_source = base / "archived.osh.msgpack.stream"
     if not cached_source.exists() or cached_source.stat().st_mtime < archived_mtime:
         archived = [
             event
@@ -281,8 +291,10 @@ def load_history(base: Path) -> Iterator[PackedOshEvent]:
             key=lambda e: e.timestamp,
             reverse=True,
         )
-        write_batched_packed_osh_events(forward_events=archived, path=cached_source)
+        # write_batched_packed_osh_events(forward_events=archived, path=cached_source)
+        write_streamed_packed_osh_events(forward_events=archived, path=cached_source)
     else:
+        # TODO if batched, should we already save backwards?
         archived = read_events_backward(cached_source)
 
     yield from archived
@@ -491,7 +503,7 @@ def app_search(
     if mode is None:
         mode = Mode.all
 
-    events = load_history(Path("test-data"))
+    events = read_events_from_base(Path("test-data"))
 
     match mode:
         case Mode.all:
@@ -520,16 +532,19 @@ def app_bench():
     start = time.perf_counter()
     # looks like doing parallel doesnt help much, building objects is maybe the most expensive part?
     # and then anything that has to push that stuff thru a queue has some overhead on that? maybe with sorting it could still help
-    events = load_history(Path("test-data"))
+    events = read_events_from_base(Path("test-data"))
     # events = load_history_threaded(Path("test-data"))
     # events = load_history_mp(Path("test-data"))
     now = datetime.now().astimezone()
     local_tz = now.tzinfo
     assert local_tz is not None
-    print(len(entry_from_event(next(events), now, local_tz)))
+    # print(len(entry_from_event(next(events), now, local_tz)))
+    print(id(next(events)))
     first = time.perf_counter()
     print(f"first after {(first-start)*1000:_}ms")
-    print(sum(len(entry_from_event(event, now, local_tz)) for event in events))
+    # TODO ok now the majority is actually the stringification. save cached as string, other tricks?
+    # print(sum(len(entry_from_event(event, now, local_tz)) for event in events))
+    print(sum(1 for event in events))
     last = time.perf_counter()
     print(f"rest after {(last-first)*1000:_}ms")
 
