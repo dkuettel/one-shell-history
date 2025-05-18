@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import heapq
 import json
 import mmap
 import multiprocessing as mp
@@ -246,6 +247,38 @@ def read_events_backward(path: Path) -> Iterator[PackedOshEvent]:
             yield from read_streamed_packed_osh_events_backward(path)
         case _ as never:
             assert False, never
+
+
+def read_events_from_base_mergesort(base: Path) -> Iterator[PackedOshEvent]:
+    archived_sources = find_sources(base / "archive")
+    archived_mtime = max(path.stat().st_mtime for path in archived_sources)
+    cached_source = base / "archived.osh.msgpack.stream"
+    if not cached_source.exists() or cached_source.stat().st_mtime < archived_mtime:
+        archived = [
+            event
+            for source in archived_sources
+            for event in read_events_backward(source)
+        ]
+        archived = sorted(
+            archived,
+            key=lambda e: e.timestamp,
+            reverse=True,
+        )
+        # write_batched_packed_osh_events(forward_events=archived, path=cached_source)
+        write_streamed_packed_osh_events(forward_events=archived, path=cached_source)
+        archived = iter(archived)
+    else:
+        # TODO if batched, should we already save backwards?
+        archived = read_events_backward(cached_source)
+
+    active_sources = find_sources(base / "active")
+    actives = [read_events_backward(source) for source in active_sources]
+
+    yield from heapq.merge(
+        *[*actives, archived],
+        key=lambda e: e.timestamp,
+        reverse=True,
+    )
 
 
 # TODO maybe base should be absolute already
@@ -532,7 +565,8 @@ def app_bench():
     start = time.perf_counter()
     # looks like doing parallel doesnt help much, building objects is maybe the most expensive part?
     # and then anything that has to push that stuff thru a queue has some overhead on that? maybe with sorting it could still help
-    events = read_events_from_base(Path("test-data"))
+    # events = read_events_from_base(Path("test-data"))
+    events = read_events_from_base_mergesort(Path("test-data"))
     # events = load_history_threaded(Path("test-data"))
     # events = load_history_mp(Path("test-data"))
     now = datetime.now().astimezone()
@@ -542,7 +576,7 @@ def app_bench():
     print(id(next(events)))
     first = time.perf_counter()
     print(f"first after {(first-start)*1000:_}ms")
-    # TODO ok now the majority is actually the stringification. save cached as string, other tricks?
+    # TODO ok now the majority of time spent is actually the stringification. save cached as string, other tricks?
     # print(sum(len(entry_from_event(event, now, local_tz)) for event in events))
     print(sum(1 for event in events))
     last = time.perf_counter()
