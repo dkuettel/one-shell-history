@@ -40,18 +40,7 @@ class PackedOshEvent(msgspec.Struct, frozen=True, tag_field="version", tag="v1")
     session: None | str
 
 
-# NOTE using tag fields so we can potentially use unions later and update the data version
-class BatchedPackedOshEvents(
-    msgspec.Struct,
-    frozen=True,
-    tag_field="version",
-    tag="v1",
-):
-    events: list[PackedOshEvent]
-
-
 packed_osh_event_decoder = msgspec.msgpack.Decoder(type=PackedOshEvent)
-batched_packed_osh_events_decoder = msgspec.msgpack.Decoder(type=BatchedPackedOshEvents)
 
 
 def write_streamed_packed_osh_events(
@@ -83,25 +72,6 @@ def read_streamed_packed_osh_events_backward(path: Path) -> Iterator[PackedOshEv
             count = int.from_bytes(mm[at : at + 2], byteorder="big", signed=False)
             yield packed_osh_event_decoder.decode(mm[at - count : at])
             at = at - count - 2
-
-
-def write_batched_packed_osh_events(
-    forward_events: Sequence[PackedOshEvent], path: Path
-):
-    path.write_bytes(
-        msgspec.msgpack.encode(BatchedPackedOshEvents(list(forward_events)))
-    )
-
-
-def read_batched_packed_osh_events_forward(path: Path) -> Iterator[PackedOshEvent]:
-    # TODO mmap might be faster here too? or read_bytes just the same?
-    with path.open("rb") as f:
-        data = batched_packed_osh_events_decoder.decode(f.read())
-        yield from data.events
-
-
-def read_batched_packed_osh_events_backward(path: Path) -> Iterator[PackedOshEvent]:
-    yield from reversed(list(read_batched_packed_osh_events_forward(path)))
 
 
 # TODO should not forget that we need to look at locking when multiple appends
@@ -241,8 +211,6 @@ def read_events_from_path(path: Path) -> Iterator[PackedOshEvent]:
             yield from read_zsh_events_backward(path)
         case [".osh"]:
             yield from read_osh_events_backward(path)
-        case [".osh", ".msgpack"]:
-            yield from read_batched_packed_osh_events_backward(path)
         case [".osh", ".msgpack", ".stream"]:
             yield from read_streamed_packed_osh_events_backward(path)
         case _ as never:
@@ -262,8 +230,6 @@ def read_events_from_paths(paths: Set[Path]) -> Iterator[PackedOshEvent]:
 def read_events_from_base(base: Path) -> Iterator[PackedOshEvent]:
     archived_sources = find_sources(base / "archive")
     archived_mtime = max(path.stat().st_mtime for path in archived_sources)
-    # TODO hmm batched vs stream didnt see a difference, but maybe just because of the long list to format?
-    # cached_source = base / "archived.osh.msgpack"
     cached_source = base / "archived.osh.msgpack.stream"
     if not cached_source.exists() or cached_source.stat().st_mtime < archived_mtime:
         archived = read_events_from_paths(archived_sources)
@@ -535,24 +501,6 @@ def append_event():
 
 @app.command("convert")
 def app_convert(paths: list[Path]):
-    for path in paths:
-        match path.suffixes:
-            case [".osh", ".msgpack"]:
-                pass
-            case _:
-                # TODO also need to convert ... that doesnt quite work then
-                events = read_events_from_path(path)
-                write_batched_packed_osh_events(
-                    forward_events=sorted(events, key=lambda e: e.timestamp),
-                    path=path.with_name(
-                        path.name[: -sum(map(len, path.suffixes))] + ".osh.msgpack"
-                    ),
-                )
-                path.unlink()
-
-
-@app.command("convert-stream")
-def app_convert_stream(paths: list[Path]):
     for path in paths:
         match path.suffixes:
             case [".osh", ".msgpack", ".stream"]:
