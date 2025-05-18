@@ -7,7 +7,7 @@ import multiprocessing as mp
 import re
 import time
 from base64 import b64encode
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Sequence, Set
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
 from enum import Enum
@@ -233,7 +233,7 @@ def find_sources(base: Path) -> set[Path]:
     }
 
 
-def read_events_backward(path: Path) -> Iterator[PackedOshEvent]:
+def read_events_from_path(path: Path) -> Iterator[PackedOshEvent]:
     match path.suffixes:
         case [".osh_legacy"]:
             yield from read_osh_legacy_events_backward(path)
@@ -249,101 +249,36 @@ def read_events_backward(path: Path) -> Iterator[PackedOshEvent]:
             assert False, never
 
 
-def read_events_from_base_mergesort(base: Path) -> Iterator[PackedOshEvent]:
-    archived_sources = find_sources(base / "archive")
-    archived_mtime = max(path.stat().st_mtime for path in archived_sources)
-    cached_source = base / "archived.osh.msgpack.stream"
-    if not cached_source.exists() or cached_source.stat().st_mtime < archived_mtime:
-        archived = [
-            event
-            for source in archived_sources
-            for event in read_events_backward(source)
-        ]
-        archived = sorted(
-            archived,
-            key=lambda e: e.timestamp,
-            reverse=True,
-        )
-        # write_batched_packed_osh_events(forward_events=archived, path=cached_source)
-        write_streamed_packed_osh_events(forward_events=archived, path=cached_source)
-        archived = iter(archived)
-    else:
-        # TODO if batched, should we already save backwards?
-        archived = read_events_backward(cached_source)
-
-    active_sources = find_sources(base / "active")
-    actives = [read_events_backward(source) for source in active_sources]
-
+def read_events_from_paths(paths: Set[Path]) -> Iterator[PackedOshEvent]:
+    sources = [read_events_from_path(path) for path in paths]
+    # TODO especially if we can do it in parallel threaded or so, new python abilities to use here?
     yield from heapq.merge(
-        *[*actives, archived],
+        *sources,
         key=lambda e: e.timestamp,
         reverse=True,
     )
 
 
-# TODO maybe base should be absolute already
 def read_events_from_base(base: Path) -> Iterator[PackedOshEvent]:
-    active_sources = find_sources(base / "active")
     archived_sources = find_sources(base / "archive")
-    # TODO could still check how easy it is to load reversely now and merge sort? slower overall, but faster time to first result?
-    # TODO especially if we can do it in parallel threaded or so, new python abilities to use here?
-    active_sources = sorted(
-        active_sources,
-        key=lambda path: path.stat().st_mtime,
-        reverse=True,
-    )
-    # TODO already much faster to first event, but currently cheating, not reverse? maybe only best effort, just all data, not necessarily any reverse
-    # TODO in fact we might already be at python's overhead time, removing all but the new format gives the same time, 0.09s, could be fine already
-    # haha ok no that was stupid. we only yield, so we never go and open any other file, so it can't make a difference of course
-    # TODO now lets rewrite old formats automatically when we encounter them and use the same name, and then skip if there is a newer one with a fitting name?
-    # TODO streamed msgspec is super fast for first, but a bit slower overall, but easy to append
-    # TODO but just plain msgspec is still only 3ms to first, and still fast for overall ... might just be the easier solution for now
-    # that is total 1000ms vs 800ms, probably not worth it just for that for the streaming
-    # but the question is how do we append, and that is the more-often operation, just appending there would be very nice
-    # loading in one msgspec call is really beautifully fast for now ... we could compact it on every read, but only append on append?
-    # the streaming version has a header that also gives a version, then it has a full list with length prefixed, and then it has appended events with len postfixed
-    # hm we could also keep it simple streamed, but again have a cached version and we know when to stop reading the stream? if we can make the cache reading fast?
-    # or only remember timestamps, and load the full stream if new, and it's the newest anyway then
-    for source in active_sources:
-        yield from read_events_backward(source)
-
     archived_mtime = max(path.stat().st_mtime for path in archived_sources)
-
     # TODO hmm batched vs stream didnt see a difference, but maybe just because of the long list to format?
-    # TODO lets measure loading time only?
     # cached_source = base / "archived.osh.msgpack"
     cached_source = base / "archived.osh.msgpack.stream"
     if not cached_source.exists() or cached_source.stat().st_mtime < archived_mtime:
-        archived = [
-            event
-            for source in archived_sources
-            for event in read_events_backward(source)
-        ]
-        archived = sorted(
-            archived,
-            key=lambda e: e.timestamp,
-            reverse=True,
-        )
+        archived = read_events_from_paths(archived_sources)
         # write_batched_packed_osh_events(forward_events=archived, path=cached_source)
-        write_streamed_packed_osh_events(forward_events=archived, path=cached_source)
-    else:
-        # TODO if batched, should we already save backwards?
-        archived = read_events_backward(cached_source)
+        write_streamed_packed_osh_events(
+            forward_events=list(reversed(list(archived))), path=cached_source
+        )
 
-    yield from archived
+    active_sources = find_sources(base / "active")
 
-    # events = load_osh_histories(base) + load_zsh(base) + load_legacy(base)
-    # TODO on this test data, sorting makes hardly any impact
-    # events = sorted(events, key=lambda e: e.timestamp, reverse=True)
-
-    # TODO msgspec is actually super fast, json is already good compared to pickle
-    # and msgpack seems even a bit faster
-    # so we could make the source format already this way, and we could cache things
-    # we have a class cache state, and maybe even know where to continue reading active files, if needed
+    yield from read_events_from_paths({*active_sources, cached_source})
 
 
 def threaded_worker(path: Path, queue: SimpleQueue[PackedOshEvent | None]):
-    for event in read_events_backward(path):
+    for event in read_events_from_path(path):
         queue.put(event)
     queue.put(None)
 
@@ -371,7 +306,7 @@ def load_history_threaded(base: Path) -> Iterator[PackedOshEvent]:
 
 
 def process_worker(path: Path, queue: mp.Queue[PackedOshEvent | None]):
-    for event in read_events_backward(path):
+    for event in read_events_from_path(path):
         queue.put(event)
     queue.put(None)
 
@@ -565,8 +500,7 @@ def app_bench():
     start = time.perf_counter()
     # looks like doing parallel doesnt help much, building objects is maybe the most expensive part?
     # and then anything that has to push that stuff thru a queue has some overhead on that? maybe with sorting it could still help
-    # events = read_events_from_base(Path("test-data"))
-    events = read_events_from_base_mergesort(Path("test-data"))
+    events = read_events_from_base(Path("test-data"))
     # events = load_history_threaded(Path("test-data"))
     # events = load_history_mp(Path("test-data"))
     now = datetime.now().astimezone()
@@ -594,7 +528,7 @@ def append_event():
     # TODO make it atomic, or lock. be sure we dont lose any history if writing fails in between ...
     # TODO ok i really dont like how much data we keep on writing every time we do a simple command
     path = Path("./test-data/active/base.osh.msgspec")
-    events = list(read_events_backward(path))
+    events = list(read_events_from_path(path))
     events.append(todo)
     write_msgpack_file(events, path)
 
@@ -607,7 +541,7 @@ def app_convert(paths: list[Path]):
                 pass
             case _:
                 # TODO also need to convert ... that doesnt quite work then
-                events = read_events_backward(path)
+                events = read_events_from_path(path)
                 write_batched_packed_osh_events(
                     forward_events=sorted(events, key=lambda e: e.timestamp),
                     path=path.with_name(
@@ -624,7 +558,7 @@ def app_convert_stream(paths: list[Path]):
             case [".osh", ".msgpack", ".stream"]:
                 pass
             case _:
-                events = read_events_backward(path)
+                events = read_events_from_path(path)
                 write_streamed_packed_osh_events(
                     forward_events=sorted(events, key=lambda e: e.timestamp),
                     path=path.with_name(
