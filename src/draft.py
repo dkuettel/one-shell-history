@@ -23,7 +23,7 @@ from typer import Typer
 # TODO discuss with yves a new format?
 # NOTE using tag fields so we can potentially use unions later and update the data version
 # TODO seems much bigger than the original data, because of the none default values? at least when checking on how archive gets bundled
-class PackedOshEvent(msgspec.Struct, frozen=True, tag_field="version", tag="v1"):
+class Event(msgspec.Struct, frozen=True, tag_field="version", tag="v1"):
     # TODO could save this as an easy thing, good enough for sorting, and only make smart when needed?
     # TODO or we could sort on the string too? float or big int would be better
     # TODO maybe assert self.timestamp.tzinfo is datetime.timezone.utc ?
@@ -40,11 +40,11 @@ class PackedOshEvent(msgspec.Struct, frozen=True, tag_field="version", tag="v1")
     session: None | str
 
 
-packed_osh_event_decoder = msgspec.msgpack.Decoder(type=PackedOshEvent)
+event_decoder = msgspec.msgpack.Decoder(type=Event)
 
 
 def write_streamed_packed_osh_events(
-    forward_events: Sequence[PackedOshEvent], path: Path
+    forward_events: Sequence[Event], path: Path
 ):
     # TODO here there is no benefit giving the type already? but we could just have one ready globally?
     encoder = msgspec.msgpack.Encoder()
@@ -59,7 +59,7 @@ def write_streamed_packed_osh_events(
             f.write(count.to_bytes(length=2, byteorder="big", signed=False))
 
 
-def read_streamed_packed_osh_events_backward(path: Path) -> Iterator[PackedOshEvent]:
+def read_streamed_packed_osh_events_backward(path: Path) -> Iterator[Event]:
     # TODO this is actually quite a bit faster than a normal file seeking implementation
     # maybe that works for everything and fast enough? is a direct total load still faster? probably yes
     with (
@@ -70,7 +70,7 @@ def read_streamed_packed_osh_events_backward(path: Path) -> Iterator[PackedOshEv
         at = len(mm) - 2
         while at > 0:
             count = int.from_bytes(mm[at : at + 2], byteorder="big", signed=False)
-            yield packed_osh_event_decoder.decode(mm[at - count : at])
+            yield event_decoder.decode(mm[at - count : at])
             at = at - count - 2
 
 
@@ -78,14 +78,14 @@ def read_streamed_packed_osh_events_backward(path: Path) -> Iterator[PackedOshEv
 # and even more so when adapting/compacting when loading
 
 
-def read_osh_events_forward(path: Path) -> Iterator[PackedOshEvent]:
+def read_osh_events_forward(path: Path) -> Iterator[Event]:
     with path.open("rt") as f:
         for i in f:
             d = json.loads(i)
             if "event" not in d:
                 continue
             d = d["event"]
-            yield PackedOshEvent(
+            yield Event(
                 timestamp=datetime.fromisoformat(d["timestamp"]),
                 command=str(d["command"]),
                 duration=float(d["duration"]),
@@ -96,7 +96,7 @@ def read_osh_events_forward(path: Path) -> Iterator[PackedOshEvent]:
             )
 
 
-def read_osh_events_backward(path: Path) -> Iterator[PackedOshEvent]:
+def read_osh_events_backward(path: Path) -> Iterator[Event]:
     yield from reversed(list(read_osh_events_forward(path)))
 
 
@@ -105,7 +105,7 @@ zsh_event_pattern = re.compile(
 )
 
 
-def read_zsh_events_forward(path: Path) -> Iterator[PackedOshEvent]:
+def read_zsh_events_forward(path: Path) -> Iterator[Event]:
     # TODO i'm not sure if all zsh history are the format as below, or does it depend on zsh settings?
     # maybe check what it looks like on a fresh system
     # and/or see that we fail if not as expected
@@ -134,7 +134,7 @@ def read_zsh_events_forward(path: Path) -> Iterator[PackedOshEvent]:
         while command.endswith("\\"):
             line, content = next(zsh_history)
             command = command[:-1] + "\n" + content
-        yield PackedOshEvent(
+        yield Event(
             timestamp=timestamp,
             command=command,
             duration=None,
@@ -145,11 +145,11 @@ def read_zsh_events_forward(path: Path) -> Iterator[PackedOshEvent]:
         )
 
 
-def read_zsh_events_backward(path: Path) -> Iterator[PackedOshEvent]:
+def read_zsh_events_backward(path: Path) -> Iterator[Event]:
     return reversed(list(read_zsh_events_forward(path)))
 
 
-def read_osh_legacy_events_forward(path: Path) -> Iterator[PackedOshEvent]:
+def read_osh_legacy_events_forward(path: Path) -> Iterator[Event]:
     # TODO we dont like expanduser
     path = path.expanduser()
     # TODO we could use the faster msgspec lib, but we will probably convert this
@@ -167,7 +167,7 @@ def read_osh_legacy_events_forward(path: Path) -> Iterator[PackedOshEvent]:
         # NOTE some older events had only second time resolution (timestamps, and durations)
         timestamp = datetime.fromisoformat(entry["timestamp"])
         if timestamp.microsecond == 0:
-            yield PackedOshEvent(
+            yield Event(
                 timestamp=timestamp,
                 command=str(entry["command"]),
                 duration=int(entry["duration"]),
@@ -177,7 +177,7 @@ def read_osh_legacy_events_forward(path: Path) -> Iterator[PackedOshEvent]:
                 session=str(entry["session"]),
             )
         else:
-            yield PackedOshEvent(
+            yield Event(
                 timestamp=timestamp,
                 command=str(entry["command"]),
                 duration=float(entry["duration"]),
@@ -188,7 +188,7 @@ def read_osh_legacy_events_forward(path: Path) -> Iterator[PackedOshEvent]:
             )
 
 
-def read_osh_legacy_events_backward(path: Path) -> Iterator[PackedOshEvent]:
+def read_osh_legacy_events_backward(path: Path) -> Iterator[Event]:
     return reversed(list(read_osh_legacy_events_forward(path)))
 
 
@@ -203,7 +203,7 @@ def find_sources(base: Path) -> set[Path]:
     }
 
 
-def read_events_from_path(path: Path) -> Iterator[PackedOshEvent]:
+def read_events_from_path(path: Path) -> Iterator[Event]:
     match path.suffixes:
         case [".osh_legacy"]:
             yield from read_osh_legacy_events_backward(path)
@@ -217,7 +217,7 @@ def read_events_from_path(path: Path) -> Iterator[PackedOshEvent]:
             assert False, never
 
 
-def read_events_from_paths(paths: Set[Path]) -> Iterator[PackedOshEvent]:
+def read_events_from_paths(paths: Set[Path]) -> Iterator[Event]:
     sources = [read_events_from_path(path) for path in paths]
     # TODO especially if we can do it in parallel threaded or so, new python abilities to use here?
     yield from heapq.merge(
@@ -227,7 +227,7 @@ def read_events_from_paths(paths: Set[Path]) -> Iterator[PackedOshEvent]:
     )
 
 
-def read_events_from_base(base: Path) -> Iterator[PackedOshEvent]:
+def read_events_from_base(base: Path) -> Iterator[Event]:
     archived_sources = find_sources(base / "archive")
     archived_mtime = max(path.stat().st_mtime for path in archived_sources)
     cached_source = base / "archived.osh.msgpack.stream"
@@ -243,16 +243,16 @@ def read_events_from_base(base: Path) -> Iterator[PackedOshEvent]:
     yield from read_events_from_paths({*active_sources, cached_source})
 
 
-def threaded_worker(path: Path, queue: SimpleQueue[PackedOshEvent | None]):
+def threaded_worker(path: Path, queue: SimpleQueue[Event | None]):
     for event in read_events_from_path(path):
         queue.put(event)
     queue.put(None)
 
 
-def load_history_threaded(base: Path) -> Iterator[PackedOshEvent]:
+def load_history_threaded(base: Path) -> Iterator[Event]:
     """total is the same, but time to first is slower"""
     sources = find_sources(base)
-    queue: SimpleQueue[PackedOshEvent | None] = SimpleQueue()
+    queue: SimpleQueue[Event | None] = SimpleQueue()
     threads = [
         Thread(target=threaded_worker, args=(source, queue)) for source in sources
     ]
@@ -261,7 +261,7 @@ def load_history_threaded(base: Path) -> Iterator[PackedOshEvent]:
     none_count = 0
     while none_count < len(sources):
         match queue.get():
-            case PackedOshEvent() as event:
+            case Event() as event:
                 yield event
             case None:
                 none_count = none_count + 1
@@ -271,16 +271,16 @@ def load_history_threaded(base: Path) -> Iterator[PackedOshEvent]:
         thread.join()
 
 
-def process_worker(path: Path, queue: mp.Queue[PackedOshEvent | None]):
+def process_worker(path: Path, queue: mp.Queue[Event | None]):
     for event in read_events_from_path(path):
         queue.put(event)
     queue.put(None)
 
 
-def load_history_mp(base: Path) -> Iterator[PackedOshEvent]:
+def load_history_mp(base: Path) -> Iterator[Event]:
     """first almost with no parallel at all, but total much slower. should send in bigger packs?"""
     sources = find_sources(base)
-    queue: mp.Queue[PackedOshEvent | None] = mp.Queue()
+    queue: mp.Queue[Event | None] = mp.Queue()
     processes = [
         mp.Process(target=process_worker, args=(source, queue)) for source in sources
     ]
@@ -289,7 +289,7 @@ def load_history_mp(base: Path) -> Iterator[PackedOshEvent]:
     none_count = 0
     while none_count < len(sources):
         match queue.get():
-            case PackedOshEvent() as event:
+            case Event() as event:
                 yield event
             case None:
                 none_count = none_count + 1
@@ -328,10 +328,10 @@ def human_duration(dt: timedelta | float) -> str:
     return f"{round(y)}y"
 
 
-def preview_from_event(event: PackedOshEvent | BaggedEvent, tz: tzinfo) -> str:
+def preview_from_event(event: Event | BaggedEvent, tz: tzinfo) -> str:
     ts = event.timestamp.astimezone(tz)
     match event:
-        case PackedOshEvent(
+        case Event(
             duration=(float(duration) | int(duration)),
             exit_code=int(exit_code),
             folder=str(folder),
@@ -346,7 +346,7 @@ def preview_from_event(event: PackedOshEvent | BaggedEvent, tz: tzinfo) -> str:
                 event.command,
             ]
 
-        case PackedOshEvent():
+        case Event():
             parts = [
                 f"ran on {ts}",
                 "",
@@ -368,7 +368,7 @@ def preview_from_event(event: PackedOshEvent | BaggedEvent, tz: tzinfo) -> str:
 
 
 def entry_from_event(
-    event: PackedOshEvent | BaggedEvent, now: datetime, tz: tzinfo
+    event: Event | BaggedEvent, now: datetime, tz: tzinfo
 ) -> str:
     enc_cmd = b64encode(event.command.encode()).decode()
     enc_preview = b64encode(preview_from_event(event, tz).encode()).decode()
@@ -395,7 +395,7 @@ class BaggedEvent:
     unknown_ratio: float
 
     @classmethod
-    def from_bag(cls, command: str, bag: Sequence[PackedOshEvent]) -> BaggedEvent:
+    def from_bag(cls, command: str, bag: Sequence[Event]) -> BaggedEvent:
         success = sum(1 for e in bag if e.exit_code == 0)
         failure = sum(1 for e in bag if e.exit_code != 0)
         unknown = 1.0 - success - failure
@@ -411,8 +411,8 @@ class BaggedEvent:
         )
 
 
-def bagged_events(events: list[PackedOshEvent]) -> list[BaggedEvent]:
-    bagged: dict[str, list[PackedOshEvent]] = {}
+def bagged_events(events: list[Event]) -> list[BaggedEvent]:
+    bagged: dict[str, list[Event]] = {}
     for event in events:
         bagged.setdefault(event.command, []).append(event)
     return [BaggedEvent.from_bag(cmd, bag) for cmd, bag in bagged.items()]
