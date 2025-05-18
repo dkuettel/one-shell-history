@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import mmap
 import multiprocessing as mp
 import os
 import re
@@ -120,15 +121,19 @@ def write_msgpack_stream_file(events: list[Event], path: Path):
             f.write(size.to_bytes(length=2, byteorder="big", signed=False))
 
 
-def read_msgpack_stream_file(path: Path) -> Iterator[Event]:
-    with path.open("rb") as f:
-        f.seek(0, os.SEEK_END)
-        while f.tell() > 0:
-            f.seek(-2, os.SEEK_CUR)
-            size = int.from_bytes(f.read(2), byteorder="big", signed=False)
-            f.seek(-2 - size, os.SEEK_CUR)
-            yield msgpack_stream_decoder.decode(f.read(size))
-            f.seek(-size, os.SEEK_CUR)
+def read_msgpack_stream_file_mmap(path: Path) -> Iterator[Event]:
+    # TODO this is actually quite a bit faster than a normal file seeking implementation
+    # maybe that works for everything and fast enough? is a direct total load still faster? probably yes
+    with (
+        # TODO i dont understand why the plus here
+        path.open("r+b") as f,
+        mmap.mmap(f.fileno(), 0) as mm,
+    ):
+        at = len(mm) - 2
+        while at > 0:
+            count = int.from_bytes(mm[at : at + 2], byteorder="big", signed=False)
+            yield msgpack_stream_decoder.decode(mm[at - count : at])
+            at = at - count - 2
 
 
 event_pattern = re.compile(r"^: (?P<timestamp>\d+):(?P<duration>\d+);(?P<command>.*)$")
@@ -238,7 +243,7 @@ def load_source(path: Path) -> Iterator[Event]:
         case [".osh", ".msgpack"]:
             yield from read_msgpack_file(path)
         case [".osh", ".msgpack", ".stream"]:
-            yield from read_msgpack_stream_file(path)
+            yield from read_msgpack_stream_file_mmap(path)
         case _ as never:
             assert False, never
 
@@ -264,6 +269,9 @@ def load_history(base: Path) -> Iterator[Event]:
     # that is total 1000ms vs 800ms, probably not worth it just for that for the streaming
     # but the question is how do we append, and that is the more-often operation, just appending there would be very nice
     # loading in one msgspec call is really beautifully fast for now ... we could compact it on every read, but only append on append?
+    # the streaming version has a header that also gives a version, then it has a full list with length prefixed, and then it has appended events with len postfixed
+    # hm we could also keep it simple streamed, but again have a cached version and we know when to stop reading the stream? if we can make the cache reading fast?
+    # or only remember timestamps, and load the full stream if new, and it's the newest anyway then
     for source in active_sources[:1]:
         yield from load_source(source)
     return
@@ -538,7 +546,13 @@ def app_nop():
 
 @app.command("append-event")
 def append_event():
-    pass
+    # TODO get the right file
+    # TODO make it atomic, or lock. be sure we dont lose any history if writing fails in between ...
+    # TODO ok i really dont like how much data we keep on writing every time we do a simple command
+    path = Path("./test-data/active/base.osh.msgspec")
+    events = list(load_source(path))
+    events.append(todo)
+    write_msgpack_file(events, path)
 
 
 @app.command("convert")
