@@ -378,7 +378,7 @@ class Mode(Enum):
 app = Typer(pretty_exceptions_enable=False)
 
 
-@app.command()
+@app.command("search")
 def app_search(
     mode: Mode | None = None,
     session: str | None = None,
