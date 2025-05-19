@@ -3,7 +3,6 @@ from __future__ import annotations
 import heapq
 import json
 import mmap
-import multiprocessing as mp
 import re
 import time
 from base64 import b64encode
@@ -12,8 +11,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
 from enum import Enum
 from pathlib import Path
-from queue import SimpleQueue
-from threading import Thread
 from typing import assert_never
 
 import msgspec
@@ -43,7 +40,7 @@ class Event(msgspec.Struct, frozen=True, tag_field="version", tag="v1"):
 event_decoder = msgspec.msgpack.Decoder(type=Event)
 
 
-def write_streamed_packed_osh_events(forward_events: Sequence[Event], path: Path):
+def write_osh_events(forward_events: Sequence[Event], path: Path):
     # TODO here there is no benefit giving the type already? but we could just have one ready globally?
     encoder = msgspec.msgpack.Encoder()
     with path.open("wb") as f:
@@ -60,7 +57,7 @@ def write_streamed_packed_osh_events(forward_events: Sequence[Event], path: Path
             f.write(count.to_bytes(length=2, byteorder="big", signed=False))
 
 
-def append_streamed_packed_osh_event(event: Event, path: Path):
+def append_osh_event(event: Event, path: Path):
     encoder = msgspec.msgpack.Encoder()
     with path.open("ab") as f:
         data = encoder.encode(event)
@@ -76,7 +73,7 @@ def append_streamed_packed_osh_event(event: Event, path: Path):
         f.write(count.to_bytes(length=2, byteorder="big", signed=False))
 
 
-def read_streamed_packed_osh_events_backward(path: Path) -> Iterator[Event]:
+def read_osh_events(path: Path) -> Iterator[Event]:
     # TODO this is actually quite a bit faster than a normal file seeking implementation
     # maybe that works for everything and fast enough? is a direct total load still faster? probably yes
     with (
@@ -95,34 +92,33 @@ def read_streamed_packed_osh_events_backward(path: Path) -> Iterator[Event]:
 # and even more so when adapting/compacting when loading
 
 
-def read_osh_events_forward(path: Path) -> Iterator[Event]:
+def read_old_osh_events(path: Path) -> Iterator[Event]:
+    events = []
     with path.open("rt") as f:
         for i in f:
             d = json.loads(i)
             if "event" not in d:
                 continue
             d = d["event"]
-            yield Event(
-                timestamp=datetime.fromisoformat(d["timestamp"]),
-                command=str(d["command"]),
-                duration=float(d["duration"]),
-                exit_code=int(d["exit-code"]),
-                folder=str(d["folder"]),
-                machine=str(d["machine"]),
-                session=str(d["session"]),
+            events.append(
+                Event(
+                    timestamp=datetime.fromisoformat(d["timestamp"]),
+                    command=str(d["command"]),
+                    duration=float(d["duration"]),
+                    exit_code=int(d["exit-code"]),
+                    folder=str(d["folder"]),
+                    machine=str(d["machine"]),
+                    session=str(d["session"]),
+                )
             )
+    yield from reversed(events)
 
 
-def read_osh_events_backward(path: Path) -> Iterator[Event]:
-    yield from reversed(list(read_osh_events_forward(path)))
+def read_zsh_events(path: Path) -> Iterator[Event]:
+    zsh_event_pattern = re.compile(
+        r"^: (?P<timestamp>\d+):(?P<duration>\d+);(?P<command>.*)$"
+    )
 
-
-zsh_event_pattern = re.compile(
-    r"^: (?P<timestamp>\d+):(?P<duration>\d+);(?P<command>.*)$"
-)
-
-
-def read_zsh_events_forward(path: Path) -> Iterator[Event]:
     # TODO i'm not sure if all zsh history are the format as below, or does it depend on zsh settings?
     # maybe check what it looks like on a fresh system
     # and/or see that we fail if not as expected
@@ -139,6 +135,8 @@ def read_zsh_events_forward(path: Path) -> Iterator[Event]:
         start=1,
     )
 
+    events = []
+
     for line, content in zsh_history:
         match = zsh_event_pattern.fullmatch(content)
         if match is None:
@@ -151,22 +149,22 @@ def read_zsh_events_forward(path: Path) -> Iterator[Event]:
         while command.endswith("\\"):
             line, content = next(zsh_history)
             command = command[:-1] + "\n" + content
-        yield Event(
-            timestamp=timestamp,
-            command=command,
-            duration=None,
-            exit_code=None,
-            folder=None,
-            machine=None,
-            session=None,
+        events.append(
+            Event(
+                timestamp=timestamp,
+                command=command,
+                duration=None,
+                exit_code=None,
+                folder=None,
+                machine=None,
+                session=None,
+            )
         )
 
-
-def read_zsh_events_backward(path: Path) -> Iterator[Event]:
-    return reversed(list(read_zsh_events_forward(path)))
+    yield from reversed(events)
 
 
-def read_osh_legacy_events_forward(path: Path) -> Iterator[Event]:
+def read_osh_legacy_events(path: Path) -> Iterator[Event]:
     # TODO we dont like expanduser
     path = path.expanduser()
     # TODO we could use the faster msgspec lib, but we will probably convert this
@@ -177,7 +175,7 @@ def read_osh_legacy_events_forward(path: Path) -> Iterator[Event]:
     # 2) osh events with time resolution in seconds -> usually see it from timestamp
     # 3) osh events with time resolution in microseconds -> usually see it from timestamp
 
-    for entry in data:
+    for entry in reversed(data):
         # NOTE imported zsh events have no session entry
         if "session" not in entry:
             continue
@@ -205,17 +203,12 @@ def read_osh_legacy_events_forward(path: Path) -> Iterator[Event]:
             )
 
 
-def read_osh_legacy_events_backward(path: Path) -> Iterator[Event]:
-    return reversed(list(read_osh_legacy_events_forward(path)))
-
-
 def find_sources(base: Path) -> set[Path]:
     # TODO would be better if globbing and loaders would not be separate, could get out of sync
     return {
         *base.rglob("*.osh_legacy"),
         *base.rglob("*.zsh_history"),
         *base.rglob("*.osh"),
-        *base.rglob("*.osh.msgpack"),
         *base.rglob("*.osh.msgpack.stream"),
     }
 
@@ -223,13 +216,11 @@ def find_sources(base: Path) -> set[Path]:
 def read_events_from_path(path: Path) -> Iterator[Event]:
     match path.suffixes:
         case [".osh_legacy"]:
-            yield from read_osh_legacy_events_backward(path)
+            yield from read_osh_legacy_events(path)
         case [".zsh_history"]:
-            yield from read_zsh_events_backward(path)
+            yield from read_zsh_events(path)
         case [".osh"]:
-            yield from read_osh_events_backward(path)
-        case [".osh", ".msgpack", ".stream"]:
-            yield from read_streamed_packed_osh_events_backward(path)
+            yield from read_osh_events(path)
         case _ as never:
             assert False, never
 
@@ -247,73 +238,17 @@ def read_events_from_paths(paths: Set[Path]) -> Iterator[Event]:
 def read_events_from_base(base: Path) -> Iterator[Event]:
     archived_sources = find_sources(base / "archive")
     archived_mtime = max(path.stat().st_mtime for path in archived_sources)
-    cached_source = base / "archived.osh.msgpack.stream"
+    cached_source = base / "archived.osh"
     if not cached_source.exists() or cached_source.stat().st_mtime < archived_mtime:
         archived = read_events_from_paths(archived_sources)
         # write_batched_packed_osh_events(forward_events=archived, path=cached_source)
-        write_streamed_packed_osh_events(
+        write_osh_events(
             forward_events=list(reversed(list(archived))), path=cached_source
         )
 
     active_sources = find_sources(base / "active")
 
     yield from read_events_from_paths({*active_sources, cached_source})
-
-
-def threaded_worker(path: Path, queue: SimpleQueue[Event | None]):
-    for event in read_events_from_path(path):
-        queue.put(event)
-    queue.put(None)
-
-
-def load_history_threaded(base: Path) -> Iterator[Event]:
-    """total is the same, but time to first is slower"""
-    sources = find_sources(base)
-    queue: SimpleQueue[Event | None] = SimpleQueue()
-    threads = [
-        Thread(target=threaded_worker, args=(source, queue)) for source in sources
-    ]
-    for thread in threads:
-        thread.start()
-    none_count = 0
-    while none_count < len(sources):
-        match queue.get():
-            case Event() as event:
-                yield event
-            case None:
-                none_count = none_count + 1
-            case _ as never:
-                assert_never(never)
-    for thread in threads:
-        thread.join()
-
-
-def process_worker(path: Path, queue: mp.Queue[Event | None]):
-    for event in read_events_from_path(path):
-        queue.put(event)
-    queue.put(None)
-
-
-def load_history_mp(base: Path) -> Iterator[Event]:
-    """first almost with no parallel at all, but total much slower. should send in bigger packs?"""
-    sources = find_sources(base)
-    queue: mp.Queue[Event | None] = mp.Queue()
-    processes = [
-        mp.Process(target=process_worker, args=(source, queue)) for source in sources
-    ]
-    for process in processes:
-        process.start()
-    none_count = 0
-    while none_count < len(sources):
-        match queue.get():
-            case Event() as event:
-                yield event
-            case None:
-                none_count = none_count + 1
-            case _ as never:
-                assert_never(never)
-    for process in processes:
-        process.join()
 
 
 def human_duration(dt: timedelta | float) -> str:
@@ -510,10 +445,10 @@ def append_event():
     # TODO ok i really dont like how much data we keep on writing every time we do a simple command
     event = todo()
     path = Path("./test-data/active/base.osh.msgspec.stream")
-    append_streamed_packed_osh_event(event, path)
+    append_osh_event(event, path)
 
 
-@app.command("convert")
+@app.command("convert", help="convert anything to the osh format")
 def app_convert(paths: list[Path]):
     for path in paths:
         match path.suffixes:
@@ -521,14 +456,41 @@ def app_convert(paths: list[Path]):
                 pass
             case _:
                 events = read_events_from_path(path)
-                write_streamed_packed_osh_events(
-                    forward_events=sorted(events, key=lambda e: e.timestamp),
-                    path=path.with_name(
-                        path.name[: -sum(map(len, path.suffixes))]
-                        + ".osh.msgpack.stream"
-                    ),
+                new_path = path.with_name(
+                    path.name[: -sum(map(len, path.suffixes))] + ".osh"
                 )
-                path.unlink()
+                write_osh_events(
+                    forward_events=sorted(events, key=lambda e: e.timestamp),
+                    path=new_path,
+                )
+                if path != new_path:
+                    path.unlink()
+
+
+@app.command("convert-osh-legacy", help="convert an osh legacy file to the osh format")
+def app_convert_osh_legacy(paths: list[Path]):
+    for path in paths:
+        events = read_osh_legacy_events(path)
+        new_path = path.with_name(path.name[: -sum(map(len, path.suffixes))] + ".osh")
+        write_osh_events(
+            forward_events=sorted(events, key=lambda e: e.timestamp),
+            path=new_path,
+        )
+        if path != new_path:
+            path.unlink()
+
+
+@app.command("convert-old-osh", help="convert an old osh file to the osh format")
+def app_convert_old_osh(paths: list[Path]):
+    for path in paths:
+        events = read_old_osh_events(path)
+        new_path = path.with_name(path.name[: -sum(map(len, path.suffixes))] + ".osh")
+        write_osh_events(
+            forward_events=sorted(events, key=lambda e: e.timestamp),
+            path=new_path,
+        )
+        if path != new_path:
+            path.unlink()
 
 
 # TODO bagged stuff is not as good as before, allow filtering for failed and co? order by most recent?
