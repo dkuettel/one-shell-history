@@ -494,6 +494,7 @@ def app_convert_old_osh(paths: list[Path]):
 
 
 # TODO bagged stuff is not as good as before, allow filtering for failed and co? order by most recent?
+# TODO what about removing duplicates? keep only the most recent one?
 # TODO append event, and maybe new format?
 # TODO stats :)
 
