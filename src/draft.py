@@ -43,20 +43,37 @@ class Event(msgspec.Struct, frozen=True, tag_field="version", tag="v1"):
 event_decoder = msgspec.msgpack.Decoder(type=Event)
 
 
-def write_streamed_packed_osh_events(
-    forward_events: Sequence[Event], path: Path
-):
+def write_streamed_packed_osh_events(forward_events: Sequence[Event], path: Path):
     # TODO here there is no benefit giving the type already? but we could just have one ready globally?
     encoder = msgspec.msgpack.Encoder()
     with path.open("wb") as f:
         for event in forward_events:
             data = encoder.encode(event)
             count = len(data)
-            # TODO need to think about the maximum size here, ran into it at last once with 2 bytes now
+            # TODO need to think about the maximum size here, ran into it at least once with 2 bytes now
             if count > 2**16:
+                # TODO getting one entry with 125518 bytes. ok i think it's fine, this is a useless command for the history, let's stick with 2 bytes
+                # hmm unless we write some multiline script? still, at the border
+                # print(f"{count} bytes are too many: {event}")
                 continue
             f.write(data)
             f.write(count.to_bytes(length=2, byteorder="big", signed=False))
+
+
+def append_streamed_packed_osh_event(event: Event, path: Path):
+    encoder = msgspec.msgpack.Encoder()
+    with path.open("ab") as f:
+        data = encoder.encode(event)
+        count = len(data)
+        # TODO need to think about the maximum size here, ran into it at least once with 2 bytes now
+        if count > 2**16:
+            # TODO getting one entry with 125518 bytes. ok i think it's fine, this is a useless command for the history, let's stick with 2 bytes
+            # hmm unless we write some multiline script? still, at the border
+            # print(f"{count} bytes are too many: {event}")
+            return
+        # TODO not really atomic i guess
+        f.write(data)
+        f.write(count.to_bytes(length=2, byteorder="big", signed=False))
 
 
 def read_streamed_packed_osh_events_backward(path: Path) -> Iterator[Event]:
@@ -367,9 +384,7 @@ def preview_from_event(event: Event | BaggedEvent, tz: tzinfo) -> str:
     return "\n".join(parts)
 
 
-def entry_from_event(
-    event: Event | BaggedEvent, now: datetime, tz: tzinfo
-) -> str:
+def entry_from_event(event: Event | BaggedEvent, now: datetime, tz: tzinfo) -> str:
     enc_cmd = b64encode(event.command.encode()).decode()
     enc_preview = b64encode(preview_from_event(event, tz).encode()).decode()
     ago = human_duration(now - event.timestamp)
@@ -493,10 +508,9 @@ def append_event():
     # TODO get the right file
     # TODO make it atomic, or lock. be sure we dont lose any history if writing fails in between ...
     # TODO ok i really dont like how much data we keep on writing every time we do a simple command
-    path = Path("./test-data/active/base.osh.msgspec")
-    events = list(read_events_from_path(path))
-    events.append(todo)
-    write_msgpack_file(events, path)
+    event = todo()
+    path = Path("./test-data/active/base.osh.msgspec.stream")
+    append_streamed_packed_osh_event(event, path)
 
 
 @app.command("convert")
