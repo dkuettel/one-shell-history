@@ -348,8 +348,8 @@ class BaggedEvent:
     def from_bag(cls, command: str, bag: Sequence[Event]) -> BaggedEvent:
         success = sum(1 for e in bag if e.exit_code == 0)
         failure = sum(1 for e in bag if e.exit_code != 0)
-        unknown = 1.0 - success - failure
         count = len(bag)
+        unknown = count - success - failure
         return cls(
             # TODO which one to use here?
             timestamp=bag[0].timestamp,
