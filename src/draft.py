@@ -272,11 +272,11 @@ def human_duration(dt: timedelta | float) -> str:
         return f"{round(h)}h"
     d = h / 24
     if d < 7:
-        return f"{round(d)}d"
+        return f"{round(d)}D"
     if d < 365:
-        return f"{round(d / 7)}w"
+        return f"{round(d / 7)}W"
     y = d / 365
-    return f"{round(y)}y"
+    return f"{round(y)}Y"
 
 
 def preview_from_event(event: Event | BaggedEvent, tz: tzinfo) -> str:
