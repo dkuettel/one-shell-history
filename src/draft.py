@@ -58,19 +58,17 @@ def write_osh_events(forward_events: Sequence[Event], path: Path):
 
 
 def append_osh_event(event: Event, path: Path):
-    encoder = msgspec.msgpack.Encoder()
+    data = msgspec.msgpack.encode(event)
+    count = len(data)
+    # TODO need to think about the maximum size here, ran into it at least once with 2 bytes now
+    if count > 2**16:
+        # TODO getting one entry with 125518 bytes. ok i think it's fine, this is a useless command for the history, let's stick with 2 bytes
+        # hmm unless we write some multiline script? still, at the border
+        # print(f"{count} bytes are too many: {event}")
+        return  # TODO raise? silent is a bit bad
     with path.open("ab") as f:
-        data = encoder.encode(event)
-        count = len(data)
-        # TODO need to think about the maximum size here, ran into it at least once with 2 bytes now
-        if count > 2**16:
-            # TODO getting one entry with 125518 bytes. ok i think it's fine, this is a useless command for the history, let's stick with 2 bytes
-            # hmm unless we write some multiline script? still, at the border
-            # print(f"{count} bytes are too many: {event}")
-            return
-        # TODO not really atomic i guess
-        f.write(data)
-        f.write(count.to_bytes(length=2, byteorder="big", signed=False))
+        # NOTE a single append write call has a chance to be atomic
+        f.write(data + count.to_bytes(length=2, byteorder="big", signed=False))
 
 
 def read_osh_events(path: Path) -> Iterator[Event]:
