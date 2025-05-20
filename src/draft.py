@@ -3,6 +3,7 @@ from __future__ import annotations
 import heapq
 import json
 import mmap
+import os
 import re
 import time
 from base64 import b64encode
@@ -11,10 +12,10 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone, tzinfo
 from enum import Enum
 from pathlib import Path
-from typing import assert_never
+from typing import Annotated, assert_never
 
 import msgspec
-from typer import Typer
+import typer
 
 
 # TODO discuss with yves a new format?
@@ -373,7 +374,7 @@ class Mode(Enum):
     bag = "bag"
 
 
-app = Typer(pretty_exceptions_enable=False)
+app = typer.Typer(pretty_exceptions_enable=False)
 
 
 @app.command("search")
@@ -437,12 +438,35 @@ def app_nop():
 
 
 @app.command("append-event")
-def append_event():
-    # TODO get the right file
-    # TODO make it atomic, or lock. be sure we dont lose any history if writing fails in between ...
-    # TODO ok i really dont like how much data we keep on writing every time we do a simple command
-    event = todo()
-    path = Path("./test-data/active/base.osh.msgspec.stream")
+def app_append_event(
+    starttime: Annotated[float, typer.Option()],
+    command: Annotated[str, typer.Option()],
+    folder: Annotated[str, typer.Option()],
+    endtime: Annotated[float, typer.Option()],
+    exit_code: Annotated[int, typer.Option()],
+    machine: Annotated[str, typer.Option()],
+    session: Annotated[str, typer.Option()],
+):
+    # TODO make it atomic, or lock. be sure we dont lose any history if writing fails in between?
+    path = Path(os.environ.get("OSH_HOME", "~/.osh")).expanduser() / "local.osh"
+    if path.is_symlink():
+        path = path.resolve(strict=True)
+    if not path.exists():
+        path.touch()
+
+    timestamp = datetime.fromtimestamp(starttime, tz=timezone.utc)
+    duration = float(endtime - starttime)
+
+    event = Event(
+        timestamp=timestamp,
+        command=command,
+        duration=duration,
+        exit_code=exit_code,
+        folder=folder,
+        machine=machine,
+        session=session,
+    )
+
     append_osh_event(event, path)
 
 
