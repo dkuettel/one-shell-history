@@ -1,12 +1,12 @@
 
 next:
 - soon most of the dependencies are gone
-- switch to python 13 when msgspec is ready
-- maybe fzf is easier to use if we start fzf
-    - and fzf starts another python process that streams?
-    - if we do one-shot loading, that might be way easier
-    - because we just make a component that streams the history
-    - and we make something that selects, done
+x switch to python 13 when msgspec is ready
+x maybe fzf is easier to use if we start fzf
+    x and fzf starts another python process that streams?
+    x if we do one-shot loading, that might be way easier
+    x because we just make a component that streams the history
+    x and we make something that selects, done
 x uh i'm using the dev branch to run it, need to change it (again) to be able to dev and use
     x have a submodule and do it the right way on the config side?
         x noticed that if you didnt run setup, and no env there, it will still try and not fail early, but then fail because old python version
@@ -42,7 +42,7 @@ x no more verbose about rpc in the log file? especially for systemd not so much 
 - agg search or reverse search for current folder instead of current session
     - easy to find something project relevant
     - generally a way to filter also based on folder? if not here but know what it was
-- in osh cli py file, global config variable still needed, still need to declare? for reading only no
+x in osh cli py file, global config variable still needed, still need to declare? for reading only no
 x ctrl-r should be backward search
     x ctrl-r cycles: backward global, backward session, aggregated filtered, aggregated unfiltered
     x can we go directly with ctrl-1 and so on to a desired one? or tab? or letters? numbers might only work with alt-.
@@ -61,16 +61,16 @@ x ctrl-r should be backward search
         x ahh true that was by design, local.osh only defines where to add, it's not sourced, rethink if that is nice
         x let's keep the default of symlinking into ./active
         x but also consider local.osh a source, and be robust to duplicate files there
-o ctrl-p uses osh, but not arrow-up, that is harder to map?
+x ctrl-p uses osh, but not arrow-up, that is harder to map?
     x speed good enough? sometimes feels bumpy, could still do it "locally"
     x but "locally" means code needs to be done for every shell
-    - is there a way to map ctrl-p to reverse search in session? kinda close to the familiar approach
+    x is there a way to map ctrl-p to reverse search in session? kinda close to the familiar approach
 - smart reuse: use selected command, but translate paths to work for where you are now
     - since we know the original path it was executed in
 - readme should mention posh - powered by osh
-- what is really slow?
-    - ctrl-e is slow even though that requires no aggregation
-    - did some improvements, still valid?
+x what is really slow?
+    x ctrl-e is slow even though that requires no aggregation
+    x did some improvements, still valid?
 - complete/search files/paths from history?
     - sometimes cd to complicated folder cant be searched because we hide cd
     - (but we could go to non-ignored search)
@@ -89,11 +89,11 @@ x say only once per session that server is not reachable?
     x in interactive searches we can give a warning in the header or so everytime
     x just so people know why it's slow, if it is
     x adding slowness is not actually noticed really, because it's forked, that's why one message is enough
-o make aggregated-filtered just aggregated, the default one should be the short name
-- checking man systemd.service again, I think we can just go with type=simple service, so nothing at all
-    - the notify doesnt give much benefit, their recommendation is to use simple
-    - just the shutdown should remain synchronous, to be sure data is saved?
-    - though currently that's not really useful, but at least have it cleanup the command socket?
+x make aggregated-filtered just aggregated, the default one should be the short name
+x checking man systemd.service again, I think we can just go with type=simple service, so nothing at all
+    x the notify doesnt give much benefit, their recommendation is to use simple
+    x just the shutdown should remain synchronous, to be sure data is saved?
+    x though currently that's not really useful, but at least have it cleanup the command socket?
 
 
 cleanliness:
@@ -101,13 +101,13 @@ cleanliness:
     - or we split it up into different files?
 
 
-far out:
-- could we stream only the simple index to fzf
-    - and then inside that process we have a fifo or so for the preview command to fetch the meta data?
-    - no more difficult parsing, maybe faster, because we dont have to stream all the data yet, only what's needed
+far out;
+x could we stream only the simple index to fzf
+    x and then inside that process we have a fifo or so for the preview command to fetch the meta data?
+    x no more difficult parsing, maybe faster, because we dont have to stream all the data yet, only what's needed
 
 
-ctrl-p and ctrl-n:
+ctrl-p and ctrl-n;
 x the original zsh behavior is a bit more complicated, not fully documented, but from observation
 x it does prefix search, but it always puts the cursor at the end of the buffer
 x not sure how it knows when to use the old prefix for the search and when to use the cursor position
@@ -116,7 +116,9 @@ x it seems that on first ctrl-p it will use whatever is there for prefix
 x then it doesnt change it until you make your first own change again, that's the new prefix from there on
 x it uses the full buffer as prefix, not the cursor position
 x and it always places you at the end
-x osh could implement it this way, to be close enough:
+
+
+x osh could implement it this way, to be close enough;
     x __osh_prefix_timestamp and __osh_prefix_last
     x on ctrl-p or -n, if prefix_last not set, set it to the full current buffer
     x on search result put it in the buffer and move cursor to the end
@@ -127,54 +129,54 @@ x osh could implement it this way, to be close enough:
     x or just check if ANY other key has been pressed in the meantime and then reset?
     x I think I just go with ctrl-c or execute resets, but once a prefix is set, that's it
     x then we always put the cursor at the end, seems close enough to original behaviour?
-- also put it to the up arrows?
-    - up arrows is global and ctrl-p is local?
-    - but how is it managed that up-arrow goes up in the multiline command before it goes up in the history? with ctrl-p that problem is not there
+x also put it to the up arrows?
+    x up arrows is global and ctrl-p is local?
+    x but how is it managed that up-arrow goes up in the multiline command before it goes up in the history? with ctrl-p that problem is not there
 
 
-now:
+now;
 x pickle is much faster than json, rpc likes that
     x after that change we are even closer to making it super generic anyway
     x generally also thinking about where we make flush, lets send large pickles whenever possible
     x rpc exception still needed?
-    - UniqueCommand sends full counter, too much data?
-    - faster now, but is it the speed we can expect? dumping commands list to pickle file is about the same
+    x UniqueCommand sends full counter, too much data?
+    x faster now, but is it the speed we can expect? dumping commands list to pickle file is about the same
 
 
-next:
+next;
 x esc in fzf makes it fail later, because we dont expect that key?
-- see if glob does too much work or even loads wrong files if archive or active is a git folder, ignore dot-folders?
-- bin/osh in path, symlink works?
-- move master to main also on remote? I think yves needs to know then (?)
-    - do it before anyone else uses it
-- pylint
+x see if glob does too much work or even loads wrong files if archive or active is a git folder, ignore dot-folders?
+x bin/osh in path, symlink works?
+x move master to main also on remote? I think yves needs to know then (?)
+    x do it before anyone else uses it
+x pylint
 
 
 nice to have:
-- logging? how does it play nice with systemd
-    - how about when in direct mode, where we should be quiet
-    - use structed logging
-- https://github.com/dahlia/iterfzf is interesting
-    - see as next step, check what it does
-    - is there a better way to combine it? --preview could point to a python function, that would be even nicer
-     - ok in our case we could do a request to the server, and maybe easy in linux because it's plain http
+x logging? how does it play nice with systemd
+    x how about when in direct mode, where we should be quiet
+    x use structed logging
+x https://github.com/dahlia/iterfzf is interesting
+    x see as next step, check what it does
+    x is there a better way to combine it? --preview could point to a python function, that would be even nicer
+    x ok in our case we could do a request to the server, and maybe easy in linux because it's plain http
 - sanity checker for archive, see if any duplicates or stuff
     - especially if you copied one twice earlier and later they will have so much overlap, one should have more (into the future)
     - or based on an incoming file that you point at
 - something to test the events-filter file to double check, or add/remove from cli
-- version output or so, status of service or other things
+x version output or so, status of service or other things
 
 
-sockets and streams:
-- do I need to be more careful who closes stuff and who waits?
-- like receiver says None when done with results, server stops producing, but server reading None might fail if client already closed?
-- is it possible to wait for other side's close?
+sockets and streams;
+x do I need to be more careful who closes stuff and who waits?
+x like receiver says None when done with results, server stops producing, but server reading None might fail if client already closed?
+x is it possible to wait for other side's close?
 
 
-benchmark:
-- pip install vmprof
-- needed apt python-dev or python3.0-dev ?
-- also needed libunwind-dev
+benchmark;
+x pip install vmprof
+x needed apt python-dev or python3.0-dev ?
+x also needed libunwind-dev
 
 
 relevant:
