@@ -103,7 +103,7 @@ def read_zsh_events(path: Path) -> Iterator[Event]:
         r"^: (?P<timestamp>\d+):(?P<duration>\d+);(?P<command>.*)$"
     )
 
-    # TODO I can't say that I know this is always the zsh format
+    # NOTE I can't say that I know this is always the zsh format
     # the way I have zsh setup makes it look like that
     # maybe this fails for other people
 
