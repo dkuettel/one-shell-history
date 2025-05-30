@@ -78,6 +78,10 @@
         set -eu -o pipefail
         path=(${env}/bin $path) python -m osh $@
       '';
+      shell = pkgs.runCommandLocal "shell" { } ''
+        mkdir -p $out
+        ln -sfT ${./share} $out/share
+      '';
     in
     {
       # > nix build .#name
@@ -85,7 +89,7 @@
         default = dev;
         dev = dev;
         app = app;
-        shell = self; # TODO how to only add the ./share stuff here? now the full project is here for nothing
+        shell = shell;
       };
 
       # > nix run .#name
