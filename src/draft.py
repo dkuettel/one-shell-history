@@ -577,7 +577,6 @@ def app_report():
 
 # TODO bagged stuff is not as good as before, allow filtering for failed and co? order by most recent?
 # TODO what about removing duplicates? keep only the most recent one?
-# TODO append event, and maybe new format?
 
 if __name__ == "__main__":
     app()
