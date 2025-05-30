@@ -2,13 +2,8 @@
 # source this in, eg, .zshrc, to add one-shell-history functionality
 # NOTE we assume "osh" is in the path
 
-
 autoload -U add-zsh-hook
-
-
-## session state
 __osh_session_id=$(uuidgen)
-# __osh_session_start=$(date '+%s.%N')
 
 
 ## append events
@@ -28,7 +23,7 @@ function __osh_after {
         __osh_current_command+=(
             --endtime $(date '+%s.%N')
             --exit-code $exit_code
-            --machine $(hostname)  # TODO $HOST could be faster? but it can also be changed maybe?
+            --machine $(hostname)  # NOTE $HOST could be faster? but it can also be changed maybe?
             --session $__osh_session_id
         )
         osh append-event $__osh_current_command &!
@@ -37,7 +32,6 @@ function __osh_after {
 }
 add-zsh-hook zshaddhistory __osh_before
 add-zsh-hook precmd __osh_after
-# TODO if you unfunction those, they will not work as hooks anymore, so they have to really exist
 
 
 ## global search
@@ -55,10 +49,6 @@ bindkey -M viins '^r' __osh_search
 # TODO and also make those names like the official ones: something like 'osh-previous' for easy mapping for a user
 # and for the normal history we just map to the original and then switch off that confusing behaviour for the session history
 # 'zle -N widget function' can have different names in and outside
-# but can we totally hide the function? you cant even call it from normal
-# and what about the bindkey, does it only take widgets, or can it take functions?
-# maybe we can zle -N a function and then unset the function, so its gone?
-# 'unfunction f' could work, does zle still work after that?
 ## back in local history
 function __osh_previous {
     zle set-local-history 1
