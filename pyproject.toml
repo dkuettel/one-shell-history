@@ -1,26 +1,11 @@
 [project]
 name = "osh"
 version = "0.1.0"
-description = "Add your description here"
+description = "one shell history"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-   "black",
-   "click",
-   "gitpython",
-   "ipython",
-   "isort",
-   "line_profiler",
    "msgspec",
-   "pandas",
-   "pprofile",
-   "pyinstrument",
-   "pyprof2calltree",
-   "pyyaml",
-   "pyzmq",
-   "snakeviz",
-   "tabulate",
-   "tuna",
    "typer",
 ]
 
@@ -31,4 +16,3 @@ build-backend = "hatchling.build"
 [tool.pyright]
 include = ["src"]
 typeCheckingMode = "standard"
-# typeCheckingMode = "recommended"

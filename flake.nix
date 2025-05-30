@@ -85,35 +85,10 @@
         default = dev;
         dev = dev;
         app = app;
-        shell = self;  # TODO how to only add the ./share stuff here? now the full project is here for nothing
+        shell = self; # TODO how to only add the ./share stuff here? now the full project is here for nothing
       };
 
       # > nix run .#name
       apps.${system}.default = { type = "app"; program = "${app}/bin/osh"; };
-
-      # can be used in a configuration (?) (no default?)
-      # TODO this one could also add the app itself, no? why go thru packages above? ah but we dont know what user or wherever to add it
-      # TODO so then rename this to service?
-      nixosModules.osh = { config, ... }: {
-        options = { };
-        config = {
-          systemd.user.services.osh = {
-            enable = true;
-            wantedBy = [ "default.target" ];
-            description = "osh - one shell history";
-            path = [ app ];
-            serviceConfig = {
-              Type = "notify";
-              NotifyAccess = "all";
-              # TODO had PYTHONUNBUFFERED=1 to see the log, but is that a good idea?
-              # TODO now we should not have the bin/osh anymore, right? instead a ./dev folder? with edit in it?
-              # TODO strange that here the path is not ready yet, so we need the full path for osh?
-              ExecStart = "${app}/bin/osh run-server";
-              ExecStop = "${app}/bin/osh stop-server --systemd";
-            };
-          };
-        };
-      };
-
     };
 }
