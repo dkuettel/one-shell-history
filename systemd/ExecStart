@@ -1,6 +1,0 @@
-#!/bin/zsh
-set -eux -o pipefail
-
-cd ${0:a:h}/..
-# TODO using unbuffered so that print messages are visible in system journal, but that's probably not a good solution
-PYTHONUNBUFFERED=1 bin/osh run-server
