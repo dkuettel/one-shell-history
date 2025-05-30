@@ -1,7 +1,6 @@
 
 # source this in, eg, .zshrc, to add one-shell-history functionality
 # NOTE we assume "osh" is in the path
-# TODO how can we mock it when testing? data, and not interfere with the real osh that is also in the path?
 
 
 autoload -U add-zsh-hook
