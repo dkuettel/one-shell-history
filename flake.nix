@@ -73,10 +73,15 @@
         name = "osh env";
         paths = [ venv ] ++ prod-dependencies;
       };
-      app = pkgs.writeScriptBin "osh" ''
+      osh-prod = pkgs.writeScriptBin "osh" ''
         #!${pkgs.zsh}/bin/zsh
         set -eu -o pipefail
         path=(${env}/bin $path) python -m osh $@
+      '';
+      app = pkgs.runCommandLocal "osh" { } ''
+        mkdir -p $out/bin
+        ln -sfT ${osh-prod}/bin/osh $out/bin/osh
+        ln -sfT ${./dev/osh-fzf} $out/bin/osh-fzf
       '';
       shell = pkgs.runCommandLocal "shell" { } ''
         mkdir -p $out
