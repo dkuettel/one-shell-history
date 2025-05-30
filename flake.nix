@@ -87,6 +87,7 @@
       # > nix build .#name
       packages.${system} = {
         default = dev;
+        venv = venv;
         dev = dev;
         app = app;
         shell = shell;
