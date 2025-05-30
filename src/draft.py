@@ -4,6 +4,7 @@ import heapq
 import json
 import mmap
 import os
+import random
 import re
 import time
 from base64 import b64encode
@@ -502,10 +503,81 @@ def app_convert_old_osh(paths: list[Path]):
             path.unlink()
 
 
+@app.command("report", help="report on the commander's performance")
+def app_report():
+    print()
+    print("Hello Commander, your situation report:")
+    print(flush=True)
+
+    events = list(read_events_from_base(get_base()))
+
+    if len(events) == 0:
+        print("  No data as of yet.")
+
+    else:
+        last_event = events[0]
+        first_event = events[-1]
+        start = first_event.timestamp.date()
+        end = last_event.timestamp.date()
+        total_days = (end - start).days
+        active_days_count = len({e.timestamp.date() for e in events})
+        successful_event_count = sum(e.exit_code in {0, None} for e in events)
+        active_day_average_event_count = successful_event_count // active_days_count
+        success_rate = successful_event_count / len(events)
+        failure_count = len(events) - successful_event_count
+
+        print(f"  Our classified documents cover your history from {start} to {end}.")
+        print(
+            f"  You have been on active duty for {active_days_count:,} days out of a total {total_days:,} days in the service."
+        )
+        print()
+        print(f"  Throughout your service you made {len(events):,} decisions.")
+        epic = random.choice(
+            [
+                "amazing",
+                "excellent",
+                "exceptional",
+                "eximious",
+                "extraordinary",
+                "fantastic",
+                "inconceivable",
+                "incredible",
+                "legendary",
+                "marvelous",
+                "mind-blowing",
+                "outlandish",
+                "outrageous",
+                "phenomenal",
+                "preposterous",
+                "radical",
+                "remarkable",
+                "shocking",
+                "striking",
+                "stupendous",
+                "superb",
+                "surprising",
+                "terrific",
+                "unbelievable",
+                "unheard-of",
+                "unimaginable",
+                "wicked",
+            ]
+        )
+        print(
+            f"  Sir, that's {'an' if epic[0] in 'aeiou' else 'a'} [3m{epic}[0m {active_day_average_event_count} decisions per day when on active duty."
+        )
+        print()
+        print(f"  Only {failure_count:,} of your efforts have met with failure.")
+        print(
+            f"  Your success rate is confirmed at {round(100*success_rate)} over one hundred."
+        )
+    print()
+    print(f"-- Good day, Commander.")
+
+
 # TODO bagged stuff is not as good as before, allow filtering for failed and co? order by most recent?
 # TODO what about removing duplicates? keep only the most recent one?
 # TODO append event, and maybe new format?
-# TODO stats :)
 
 if __name__ == "__main__":
     app()
