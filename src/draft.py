@@ -209,6 +209,10 @@ def read_events_from_paths(paths: Set[Path]) -> Iterator[Event]:
     )
 
 
+def get_base() -> Path:
+    return Path(os.environ.get("OSH_HOME", "~/.osh")).expanduser()
+
+
 def read_events_from_base(base: Path) -> Iterator[Event]:
     archived_sources = find_sources(base / "archive")
     archived_sources = {path.resolve(strict=True) for path in archived_sources}
@@ -370,7 +374,7 @@ def app_search(
     if mode is None:
         mode = Mode.all
 
-    events = read_events_from_base(Path("test-data"))
+    events = read_events_from_base(get_base())
 
     match mode:
         case Mode.all:
@@ -401,7 +405,7 @@ def app_bench():
     now the biggest part seems to be in stringifaction of events
     """
     start = time.perf_counter()
-    events = read_events_from_base(Path("test-data"))
+    events = read_events_from_base(get_base())
     now = datetime.now().astimezone()
     local_tz = now.tzinfo
     assert local_tz is not None
@@ -428,8 +432,7 @@ def app_append_event(
     machine: Annotated[str, typer.Option()],
     session: Annotated[str, typer.Option()],
 ):
-    # TODO make it atomic, or lock. be sure we dont lose any history if writing fails in between?
-    path = Path(os.environ.get("OSH_HOME", "~/.osh")).expanduser() / "local.osh"
+    path = get_base() / "local.osh"
     if path.is_symlink():
         path = path.resolve(strict=True)
     if not path.exists():

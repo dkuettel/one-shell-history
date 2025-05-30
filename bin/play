@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 set -eux -o pipefail
 
-path=(${0:a:h:h}/dev $path) query= mode=all session=x folder=/ ${0:a:h:h}/dev/osh-fzf
+OSH_HOME=${0:a:h:h}/test-home path=(${0:a:h:h}/dev $path) query= mode=all session=x folder=/ ${0:a:h:h}/dev/osh-fzf
 
 # NOTE uv doesnt seem to add any noticable startup time, python just takes about 0.09s, or 90ms
 # unless maybe we change some imports?
