@@ -44,31 +44,3 @@ zle -N __osh_search
 bindkey '^r' __osh_search
 bindkey -M vicmd '^r' __osh_search
 bindkey -M viins '^r' __osh_search
-
-
-# TODO and also make those names like the official ones: something like 'osh-previous' for easy mapping for a user
-# and for the normal history we just map to the original and then switch off that confusing behaviour for the session history
-# 'zle -N widget function' can have different names in and outside
-## back in local history
-function __osh_previous {
-    zle set-local-history 1
-    # TODO not sure if this one uses a prefix search
-    zle up-history
-    zle reset-prompt
-}
-zle -N __osh_previous
-bindkey '^p' __osh_previous
-bindkey -M vicmd '^p' __osh_previous
-bindkey -M viins '^p' __osh_previous
-
-
-## forward in local history
-function __osh_next {
-    zle set-local-history 1
-    zle down-history
-    zle reset-prompt
-}
-zle -N __osh_next
-bindkey '^n' __osh_next
-bindkey -M vicmd '^n' __osh_next
-bindkey -M viins '^n' __osh_next
