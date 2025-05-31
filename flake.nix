@@ -73,10 +73,13 @@
         name = "osh env";
         paths = [ venv ] ++ prod-dependencies;
       };
+      # TODO this doesnt seem to work, it leaks in the current dir into the python path
+      # does the scripts thing fix that? it doesnt. this is a bit ridiculous, no?
+      # -P probably works, but feels like that is wrong all over the place?
       osh-prod = pkgs.writeScriptBin "osh" ''
         #!${pkgs.zsh}/bin/zsh
         set -eu -o pipefail
-        path=(${env}/bin $path) python -m osh $@
+        path=(${env}/bin $path) python -P -m osh $@
       '';
       app = pkgs.runCommandLocal "osh" { } ''
         mkdir -p $out/bin
