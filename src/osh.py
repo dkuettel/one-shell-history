@@ -435,8 +435,10 @@ def app_append_event(
 ):
     path = get_base() / "local.osh"
     if path.is_symlink():
-        path = path.resolve(strict=True)
+        # NOTE the target might not yet exist
+        path = path.resolve(strict=False)
     if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.touch()
 
     timestamp = datetime.fromtimestamp(starttime, tz=timezone.utc)
