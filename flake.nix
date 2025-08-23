@@ -30,16 +30,20 @@
       inherit (nixpkgs) lib;
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
+      dev-dependencies = with pkgs; [ ruff basedpyright ];
       prod-dependencies = with pkgs; [ fzf ];
-      nix-uv = pkgs.writeScriptBin "uv" ''
+      python-version = pkgs.lib.strings.fileContents ./.python-version;
+      python-package = "python${pkgs.lib.strings.concatStrings (pkgs.lib.strings.splitString "." python-version)}";
+      python = pkgs.${python-package};
+      uv = pkgs.writeScriptBin "uv" ''
         #!${pkgs.zsh}/bin/zsh
         set -eu -o pipefail
-        UV_PYTHON=${pkgs.python313}/bin/python ${pkgs.uv}/bin/uv --no-python-downloads $@
+        UV_PYTHON=${python}/bin/python ${pkgs.uv}/bin/uv --no-python-downloads $@
       '';
       dev = pkgs.buildEnv {
         name = "dev";
         # TODO util-linux  # for uuidgen
-        paths = [ nix-uv ] ++ (with pkgs; [ python313 ruff basedpyright ]) ++ prod-dependencies;
+        paths = [ uv python ] ++ dev-dependencies ++ prod-dependencies;
         extraOutputsToInstall = [ "lib" ];
       };
       workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
@@ -95,7 +99,6 @@
       # > nix build .#name
       packages.${system} = {
         default = dev;
-        venv = venv;
         dev = dev;
         app = app;
         shell = shell;
