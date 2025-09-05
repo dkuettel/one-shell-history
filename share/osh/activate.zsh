@@ -2,8 +2,13 @@
 # source this in, eg, .zshrc, to add one-shell-history functionality
 # NOTE we assume "osh" is in the path
 
+
 autoload -U add-zsh-hook
-__osh_session_id=$(uuidgen)
+
+# NOTE anything that needs to spawn a command, like $(uuidgen) is a magnitude slower
+# try not to have it in the zshrc sourcing path, but delay it, if needed at all
+# zsh-own functions are much faster than forking/spawning commands
+# __osh_session_id=$(uuidgen)
 
 
 ## append events
@@ -17,8 +22,15 @@ function __osh_before {
         )
     fi
 }
+# after confirming a command, but before running
+add-zsh-hook zshaddhistory __osh_before
+
 function __osh_after {
+    # TODO if others have added precmd hooks, is it guaranteed that this is the return code of the just-run command?
     local exit_code=$?
+    if [[ ! -v __osh_session_id ]]; then
+        __osh_session_id=$(uuidgen)
+    fi
     if [[ -v __osh_current_command ]]; then
         __osh_current_command+=(
             --endtime $(date '+%s.%N')
@@ -30,13 +42,16 @@ function __osh_after {
         unset __osh_current_command
     fi
 }
-add-zsh-hook zshaddhistory __osh_before
+# runs just before the prompt after a command, but not on redraw
 add-zsh-hook precmd __osh_after
 
 
 ## global search
 function __osh_search {
-    BUFFER=$(mode=all query=$BUFFER session=__osh_session_id session_start=__osh_session_start folder=$PWD osh-fzf)
+    if [[ ! -v __osh_session_id ]]; then
+        __osh_session_id=$(uuidgen)
+    fi
+    BUFFER=$(mode=all query=$BUFFER session=$__osh_session_id folder=$PWD osh-fzf)
     CURSOR=$#BUFFER
     zle reset-prompt
 }

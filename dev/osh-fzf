@@ -7,7 +7,6 @@ set -eu -o pipefail
 #   "-" will show mode selection
 # query: initial query
 # session
-# session_start  TODO is that needed here?
 # folder
 # TODO ah and also need to make sure that they are in fact set!
 
