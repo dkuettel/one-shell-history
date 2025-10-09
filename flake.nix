@@ -31,7 +31,11 @@
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
       dev-dependencies = with pkgs; [ ruff basedpyright ];
-      prod-dependencies = with pkgs; [ fzf ];
+      prod-dependencies = with pkgs; [
+        fzf
+        util-linux # for uuidgen
+        procps # for pkill
+      ];
       python-version = pkgs.lib.strings.fileContents ./.python-version;
       python-package = "python${pkgs.lib.strings.concatStrings (pkgs.lib.strings.splitString "." python-version)}";
       python = pkgs.${python-package};

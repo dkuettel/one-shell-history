@@ -50,8 +50,9 @@ args=(
     --preview='echo {2} | base64 --decode'
     --print0
     --print-query
-    --bind 'start:reload:osh search --mode=$mode --session=$session --folder=$folder'
+    # NOTE pkill makes sure we notice when the `osh search` fails in-between
+    --bind 'start:reload:osh search --mode=$mode --session=$session --folder=$folder || pkill --session 0 fzf'
     --bind 'enter:become:echo {1} | base64 --decode'
     --bind 'tab:become:mode=- osh-fzf'
 )
-fzf $style $args
+osh search --mode=$mode --session=$session --folder=$folder | fzf $style $args
