@@ -271,12 +271,12 @@ def read_events_from_base(base: Path) -> Iterator[Event]:
         )
 
     active_sources = find_sources(base / "active")
-    local_source = (base / "local.osh").resolve()
+    local_source = (base / "local.osh").resolve(strict=True)
     if local_source.exists():
         active_sources = active_sources | {local_source}
     active_sources = {path.resolve(strict=True) for path in active_sources}
 
-    sources = active_sources | {cached_source}
+    sources = active_sources | {cached_source.resolve(strict=True)}
 
     # NOTE we lock all files here, but it only really works well for the archive cache and the real local one
     yield from read_events_from_paths(sources, lock=True)
@@ -468,16 +468,17 @@ def app_check():
     base = get_base()
 
     archived_sources = find_sources(base / "archive")
-    archived_sources = {path.resolve(strict=True) for path in archived_sources}
-    cached_source = (base / "archived.osh").resolve()
+    cached_source = base / "archived.osh"
     active_sources = find_sources(base / "active")
-    local_source = (base / "local.osh").resolve()
+    local_source = base / "local.osh"
 
     sources = archived_sources | active_sources
     if cached_source.exists():
         sources |= {cached_source}
     if local_source.exists():
         sources |= {local_source}
+
+    sources = {path.resolve(strict=True) for path in sources}
 
     failed = False
 
