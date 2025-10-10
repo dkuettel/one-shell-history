@@ -439,7 +439,10 @@ def app_search(
     local_tz = now.tzinfo
     assert local_tz is not None
 
+    last_timestamp = None
     for event in events:
+        assert last_timestamp is None or last_timestamp >= event.timestamp
+        last_timestamp = event.timestamp
         print(entry_from_event(event, now, local_tz), end="\x00")
 
 
@@ -451,7 +454,10 @@ def app_list():
     local_tz = now.tzinfo
     assert local_tz is not None
 
+    last_timestamp = None
     for event in events:
+        assert last_timestamp is None or last_timestamp >= event.timestamp
+        last_timestamp = event.timestamp
         print(f"{event.timestamp} -- {json.dumps(event.command)}")
 
 
