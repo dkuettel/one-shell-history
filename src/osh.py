@@ -7,6 +7,7 @@ import mmap
 import os
 import random
 import re
+import sys
 import time
 from base64 import b64encode
 from collections.abc import Iterator, Sequence, Set
@@ -459,6 +460,41 @@ def app_list():
         assert last_timestamp is None or last_timestamp >= event.timestamp
         last_timestamp = event.timestamp
         print(f"{event.timestamp} -- {json.dumps(event.command)}")
+
+
+@app.command("check")
+def app_check():
+    """check all sources if they can be loaded and are correctly sorted"""
+    base = get_base()
+
+    archived_sources = find_sources(base / "archive")
+    archived_sources = {path.resolve(strict=True) for path in archived_sources}
+    cached_source = (base / "archived.osh").resolve()
+    active_sources = find_sources(base / "active")
+    local_source = (base / "local.osh").resolve()
+
+    sources = archived_sources | active_sources
+    if cached_source.exists():
+        sources |= {cached_source}
+    if local_source.exists():
+        sources |= {local_source}
+
+    failed = False
+
+    for source in sorted(sources):
+        last_timestamp = None
+        for event in read_events_from_path(source, lock=True):
+            if last_timestamp is None or last_timestamp >= event.timestamp:
+                last_timestamp = event.timestamp
+            else:
+                print(f"not sorted: {source}")
+                failed = True
+                break
+        else:
+            print(f"    sorted: {source}")
+
+    if failed:
+        sys.exit(1)
 
 
 @app.command("bench")
