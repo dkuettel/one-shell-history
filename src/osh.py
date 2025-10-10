@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fcntl
 import heapq
 import json
 import mmap
@@ -53,23 +54,29 @@ def _append_osh_event(event: Event, file: BufferedWriter):
     file.write(data + count.to_bytes(length=2, byteorder="big", signed=False))
 
 
-def write_osh_events(forward_events: Sequence[Event], path: Path):
+def write_osh_events(forward_events: Sequence[Event], path: Path, lock: bool):
     with path.open("wb") as f:
+        if lock:
+            fcntl.flock(f, fcntl.LOCK_EX)
         for event in forward_events:
             _append_osh_event(event, f)
 
 
-def append_osh_event(event: Event, path: Path):
+def append_osh_event(event: Event, path: Path, lock: bool):
     with path.open("ab") as f:
+        if lock:
+            fcntl.flock(f, fcntl.LOCK_EX)
         _append_osh_event(event, f)
 
 
-def read_osh_events(path: Path) -> Iterator[Event]:
+def read_osh_events(path: Path, lock: bool) -> Iterator[Event]:
     with (
         # NOTE mmap needs a file descriptor that is opened for updating, thus the "+"
         path.open("r+b") as f,
         mmap.mmap(f.fileno(), 0) as mm,
     ):
+        if lock:
+            fcntl.flock(f, fcntl.LOCK_SH)
         at = len(mm) - 2
         while at > 0:
             count = int.from_bytes(mm[at : at + 2], byteorder="big", signed=False)
@@ -188,7 +195,7 @@ def find_sources(base: Path) -> set[Path]:
     }
 
 
-def read_events_from_path(path: Path) -> Iterator[Event]:
+def read_events_from_path(path: Path, lock: bool) -> Iterator[Event]:
     # NOTE has to be in synch with find_sources above
     match path.suffixes:
         case [".osh_legacy"]:
@@ -196,13 +203,13 @@ def read_events_from_path(path: Path) -> Iterator[Event]:
         case [".zsh_history"]:
             yield from read_zsh_events(path)
         case [".osh"]:
-            yield from read_osh_events(path)
+            yield from read_osh_events(path, lock)
         case _ as never:
             assert False, never
 
 
-def read_events_from_paths(paths: Set[Path]) -> Iterator[Event]:
-    sources = [read_events_from_path(path) for path in paths]
+def read_events_from_paths(paths: Set[Path], lock: bool) -> Iterator[Event]:
+    sources = [read_events_from_path(path, lock) for path in paths]
     yield from heapq.merge(
         *sources,
         key=lambda e: e.timestamp,
@@ -221,9 +228,11 @@ def read_events_from_base(base: Path) -> Iterator[Event]:
     archived_mtime = max(path.stat().st_mtime for path in archived_sources)
     cached_source = base / "archived.osh"
     if not cached_source.exists() or cached_source.stat().st_mtime < archived_mtime:
-        archived = read_events_from_paths(archived_sources)
+        archived = read_events_from_paths(archived_sources, lock=False)
         write_osh_events(
-            forward_events=list(reversed(list(archived))), path=cached_source
+            forward_events=list(reversed(list(archived))),
+            path=cached_source,
+            lock=True,
         )
 
     active_sources = find_sources(base / "active")
@@ -234,7 +243,8 @@ def read_events_from_base(base: Path) -> Iterator[Event]:
 
     sources = active_sources | {cached_source}
 
-    yield from read_events_from_paths(sources)
+    # NOTE we lock all files here, but it only really works well for the archive cache and the real local one
+    yield from read_events_from_paths(sources, lock=True)
 
 
 def human_duration(dt: timedelta | float) -> str:
@@ -455,6 +465,7 @@ def app_append_event(
     )
 
     append_osh_event(event, path)
+    append_osh_event(event, path, lock=True)
 
 
 @app.command("convert", help="convert anything to the osh format")
@@ -465,13 +476,14 @@ def app_convert(paths: list[Path]):
             case [".osh", ".msgpack", ".stream"]:
                 pass
             case _:
-                events = read_events_from_path(path)
+                events = read_events_from_path(path, lock=True)
                 new_path = path.with_name(
                     path.name[: -sum(map(len, path.suffixes))] + ".osh"
                 )
                 write_osh_events(
                     forward_events=sorted(events, key=lambda e: e.timestamp),
                     path=new_path,
+                    lock=True,
                 )
                 if path != new_path:
                     path.unlink()
@@ -486,6 +498,7 @@ def app_convert_osh_legacy(paths: list[Path]):
         write_osh_events(
             forward_events=sorted(events, key=lambda e: e.timestamp),
             path=new_path,
+            lock=True,
         )
         if path != new_path:
             path.unlink()
@@ -500,6 +513,7 @@ def app_convert_old_osh(paths: list[Path]):
         write_osh_events(
             forward_events=sorted(events, key=lambda e: e.timestamp),
             path=new_path,
+            lock=True,
         )
         if path != new_path:
             path.unlink()
