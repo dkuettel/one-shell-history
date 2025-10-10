@@ -91,11 +91,14 @@ def insert_osh_event(event: Event, path: Path, lock: bool):
         data = encoder.encode(event)
         size = len(data)
 
-        if insert_at < mm.size():
+        shift_size = mm.size() - insert_at
+        mm.resize(mm.size() + size + 2)
+
+        if shift_size > 0:
             mm.move(
                 dest=insert_at + size + 2,
                 src=insert_at,
-                count=mm.size() - insert_at,
+                count=shift_size,
             )
 
         size_bytes = size.to_bytes(length=2, byteorder="big", signed=False)
