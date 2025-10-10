@@ -43,15 +43,16 @@ event_decoder = msgspec.msgpack.Decoder(type=Event)
 encoder = msgspec.msgpack.Encoder()
 
 
-def _append_osh_event(event: Event, file: BufferedWriter):
+def append_osh_event(event: Event, file: BufferedWriter):
+    """this appends naively, it will not check for correct order"""
     data = encoder.encode(event)
-    count = len(data)
+    size = len(data)
     # NOTE the only entry I found in my history that is longer is actually an accidental paste
     # I'm guessing for normal useful commands, you won't type 10k characters
-    if count > 2**16:
+    if size > 2**16:
         return
     # NOTE a single append write call has a chance to be atomic
-    file.write(data + count.to_bytes(length=2, byteorder="big", signed=False))
+    file.write(data + size.to_bytes(length=2, byteorder="big", signed=False))
 
 
 def write_osh_events(forward_events: Sequence[Event], path: Path, lock: bool):
@@ -59,29 +60,61 @@ def write_osh_events(forward_events: Sequence[Event], path: Path, lock: bool):
         if lock:
             fcntl.flock(f, fcntl.LOCK_EX)
         for event in forward_events:
-            _append_osh_event(event, f)
+            append_osh_event(event, f)
 
 
-def append_osh_event(event: Event, path: Path, lock: bool):
-    with path.open("ab") as f:
+def insert_osh_event(event: Event, path: Path, lock: bool):
+    """insert the new event by bubbling up from the end until the right spot is found"""
+    with (
+        # NOTE mmap needs a file descriptor that is opened for updating, thus the "+"
+        path.open("r+b") as f,
+        # NOTE length=0 means map the full file
+        mmap.mmap(f.fileno(), 0) as mm,
+    ):
         if lock:
-            fcntl.flock(f, fcntl.LOCK_EX)
-        _append_osh_event(event, f)
+            fcntl.flock(f, fcntl.LOCK_SH)
+
+        insert_at = mm.size()
+
+        while insert_at > 0:
+            size = int.from_bytes(
+                mm[insert_at - 2 : insert_at],
+                byteorder="big",
+                signed=False,
+            )
+            entry = event_decoder.decode(mm[insert_at - 2 - size : insert_at - 2])
+            if entry.timestamp <= event.timestamp:
+                break
+            insert_at = insert_at - 2 - size
+
+        data = encoder.encode(event)
+        size = len(data)
+
+        if insert_at < mm.size():
+            mm.move(
+                dest=insert_at + size + 2,
+                src=insert_at,
+                count=mm.size() - insert_at,
+            )
+
+        size_bytes = size.to_bytes(length=2, byteorder="big", signed=False)
+        mm[insert_at : insert_at + size + 2] = data + size_bytes
 
 
 def read_osh_events(path: Path, lock: bool) -> Iterator[Event]:
     with (
         # NOTE mmap needs a file descriptor that is opened for updating, thus the "+"
         path.open("r+b") as f,
+        # NOTE length=0 means map the full file
         mmap.mmap(f.fileno(), 0) as mm,
     ):
         if lock:
             fcntl.flock(f, fcntl.LOCK_SH)
         at = len(mm) - 2
         while at > 0:
-            count = int.from_bytes(mm[at : at + 2], byteorder="big", signed=False)
-            yield event_decoder.decode(mm[at - count : at])
-            at = at - count - 2
+            size = int.from_bytes(mm[at : at + 2], byteorder="big", signed=False)
+            yield event_decoder.decode(mm[at - size : at])
+            at = at - size - 2
 
 
 def read_old_osh_events(path: Path) -> Iterator[Event]:
@@ -476,8 +509,9 @@ def app_append_event(
         session=session,
     )
 
-    append_osh_event(event, path)
-    append_osh_event(event, path, lock=True)
+    # NOTE we want the file sorted by increasing event.timestamp
+    # but we only call after the command has run, so a simple append is not good enough
+    insert_osh_event(event, path, lock=True)
 
 
 @app.command("convert", help="convert anything to the osh format")
