@@ -21,8 +21,6 @@ from typing import Annotated, assert_never
 import msgspec
 import typer
 
-# TODO discuss with yves the new format?
-
 
 # NOTE using tag fields so we can potentially use unions later and update the data version
 class Event(msgspec.Struct, frozen=True, tag_field="version", tag="v1"):
