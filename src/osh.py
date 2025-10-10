@@ -179,7 +179,8 @@ def read_zsh_events(path: Path) -> Iterator[Event]:
             )
         )
 
-    yield from reversed(events)
+    # NOTE zsh history files are not guaranteed to be sorted
+    yield from sorted(events, key=lambda event: event.timestamp, reverse=True)
 
 
 def read_osh_legacy_events(path: Path) -> Iterator[Event]:
