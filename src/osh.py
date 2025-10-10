@@ -561,25 +561,19 @@ def app_append_event(
     insert_osh_event(event, path, lock=True)
 
 
-@app.command("convert", help="convert anything to the osh format")
+@app.command("convert", help="convert anything to the osh format, and resort")
 def app_convert(paths: list[Path]):
     for path in paths:
         path = path.expanduser()
-        match path.suffixes:
-            case [".osh", ".msgpack", ".stream"]:
-                pass
-            case _:
-                events = read_events_from_path(path, lock=True)
-                new_path = path.with_name(
-                    path.name[: -sum(map(len, path.suffixes))] + ".osh"
-                )
-                write_osh_events(
-                    forward_events=sorted(events, key=lambda e: e.timestamp),
-                    path=new_path,
-                    lock=True,
-                )
-                if path != new_path:
-                    path.unlink()
+        events = list(read_events_from_path(path, lock=True))
+        new_path = path.with_name(path.name[: -sum(map(len, path.suffixes))] + ".osh")
+        write_osh_events(
+            forward_events=sorted(events, key=lambda e: e.timestamp),
+            path=new_path,
+            lock=True,
+        )
+        if path != new_path:
+            path.unlink()
 
 
 @app.command("convert-osh-legacy", help="convert an osh legacy file to the osh format")
