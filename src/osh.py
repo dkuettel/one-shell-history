@@ -409,6 +409,18 @@ def app_search(
         print(entry_from_event(event, now, local_tz), end="\x00")
 
 
+@app.command("list")
+def app_list():
+    events = read_events_from_base(get_base())
+
+    now = datetime.now().astimezone()
+    local_tz = now.tzinfo
+    assert local_tz is not None
+
+    for event in events:
+        print(f"{event.timestamp} -- {json.dumps(event.command)}")
+
+
 @app.command("bench")
 def app_bench():
     """some observations
