@@ -588,12 +588,15 @@ def app_report():
         success_rate = successful_event_count / len(events)
         failure_count = len(events) - successful_event_count
 
+        def f(i: int) -> str:
+            return f"{i:,}".replace(",", "'")
+
         print(f"  Our classified documents cover your history from {start} to {end}.")
         print(
-            f"  You have been on active duty for {active_days_count:,} days out of a total {total_days:,} days in the service."
+            f"  You have been on active duty for {f(active_days_count)} days out of a total {f(total_days)} days in the service."
         )
         print()
-        print(f"  Throughout your service you made {len(events):,} decisions.")
+        print(f"  Throughout your service you made {f(len(events))} decisions.")
         epic = random.choice(
             [
                 "amazing",
@@ -626,10 +629,10 @@ def app_report():
             ]
         )
         print(
-            f"  Sir, that's {'an' if epic[0] in 'aeiou' else 'a'} [3m{epic}[0m {active_day_average_event_count} decisions per day when on active duty."
+            f"  Sir, that's {'an' if epic[0] in 'aeiou' else 'a'} [3m{epic}[0m {f(active_day_average_event_count)} decisions per day when on active duty."
         )
         print()
-        print(f"  Only {failure_count:,} of your efforts have met with failure.")
+        print(f"  Only {f(failure_count)} of your efforts have met with failure.")
         print(
             f"  Your success rate is confirmed at {round(100*success_rate)} over one hundred."
         )
