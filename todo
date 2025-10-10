@@ -1,5 +1,7 @@
 
 next:
+- bagged stuff is not as good as before, allow filtering for failed and co? order by most recent?
+- what about removing duplicates? keep only the most recent one?
 - agg search or reverse search for current folder instead of current session
     - easy to find something project relevant
     - generally a way to filter also based on folder? if not here but know what it was

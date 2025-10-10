@@ -683,8 +683,5 @@ def app_report():
     print(f"-- Good day, Commander.")
 
 
-# TODO bagged stuff is not as good as before, allow filtering for failed and co? order by most recent?
-# TODO what about removing duplicates? keep only the most recent one?
-
 if __name__ == "__main__":
     app()
