@@ -1,5 +1,6 @@
 
 next:
+- typer.get_app_dir(APP_NAME) could be nicer than get_base()? and uses modern .config?
 - see https://github.com/junegunn/fzf/discussions/4545
     - transform and or --listen could make things easier? like when failing?
     - not sure yet however, because you cant send the items thru that interface, from what i can tell
