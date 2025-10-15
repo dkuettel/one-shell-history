@@ -64,59 +64,56 @@ def write_osh_events(forward_events: Sequence[Event], path: Path, lock: bool):
 
 def insert_osh_event(event: Event, path: Path, lock: bool):
     """insert the new event by bubbling up from the end until the right spot is found"""
-    with (
-        # NOTE mmap needs a file descriptor that is opened for updating, thus the "+"
-        path.open("r+b") as f,
-        # NOTE length=0 means map the full file
-        mmap.mmap(f.fileno(), 0) as mm,
-    ):
+    # NOTE mmap needs a file descriptor that is opened for updating, thus the "+"
+    with path.open("r+b") as f:
         if lock:
-            fcntl.flock(f, fcntl.LOCK_SH)
+            fcntl.flock(f, fcntl.LOCK_EX)
 
-        insert_at = mm.size()
+        # NOTE length=0 means map the full file
+        with mmap.mmap(f.fileno(), 0) as mm:
+            insert_at = mm.size()
 
-        while insert_at > 0:
-            size = int.from_bytes(
-                mm[insert_at - 2 : insert_at],
-                byteorder="big",
-                signed=False,
-            )
-            entry = event_decoder.decode(mm[insert_at - 2 - size : insert_at - 2])
-            if entry.timestamp <= event.timestamp:
-                break
-            insert_at = insert_at - 2 - size
+            while insert_at > 0:
+                size = int.from_bytes(
+                    mm[insert_at - 2 : insert_at],
+                    byteorder="big",
+                    signed=False,
+                )
+                entry = event_decoder.decode(mm[insert_at - 2 - size : insert_at - 2])
+                if entry.timestamp <= event.timestamp:
+                    break
+                insert_at = insert_at - 2 - size
 
-        data = encoder.encode(event)
-        size = len(data)
+            data = encoder.encode(event)
+            size = len(data)
 
-        shift_size = mm.size() - insert_at
-        mm.resize(mm.size() + size + 2)
+            shift_size = mm.size() - insert_at
+            mm.resize(mm.size() + size + 2)
 
-        if shift_size > 0:
-            mm.move(
-                insert_at + size + 2,  # dest
-                insert_at,  # src
-                shift_size,  # count
-            )
+            if shift_size > 0:
+                mm.move(
+                    insert_at + size + 2,  # dest
+                    insert_at,  # src
+                    shift_size,  # count
+                )
 
-        size_bytes = size.to_bytes(length=2, byteorder="big", signed=False)
-        mm[insert_at : insert_at + size + 2] = data + size_bytes
+            size_bytes = size.to_bytes(length=2, byteorder="big", signed=False)
+            mm[insert_at : insert_at + size + 2] = data + size_bytes
 
 
 def read_osh_events(path: Path, lock: bool) -> Iterator[Event]:
-    with (
-        # NOTE mmap needs a file descriptor that is opened for updating, thus the "+"
-        path.open("r+b") as f,
-        # NOTE length=0 means map the full file
-        mmap.mmap(f.fileno(), 0) as mm,
-    ):
+    # NOTE mmap needs a file descriptor that is opened for updating, thus the "+"
+    with path.open("r+b") as f:
         if lock:
             fcntl.flock(f, fcntl.LOCK_SH)
-        at = len(mm) - 2
-        while at > 0:
-            size = int.from_bytes(mm[at : at + 2], byteorder="big", signed=False)
-            yield event_decoder.decode(mm[at - size : at])
-            at = at - size - 2
+
+        # NOTE length=0 means map the full file
+        with mmap.mmap(f.fileno(), 0) as mm:
+            at = len(mm) - 2
+            while at > 0:
+                size = int.from_bytes(mm[at : at + 2], byteorder="big", signed=False)
+                yield event_decoder.decode(mm[at - size : at])
+                at = at - size - 2
 
 
 def read_old_osh_events(path: Path) -> Iterator[Event]:
