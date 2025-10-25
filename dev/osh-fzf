@@ -53,7 +53,7 @@ args=(
     --print-query
     # NOTE pkill makes sure we notice when the `osh search` fails in-between
     --bind 'start:reload:osh search --mode=$mode --session=$session --folder=$folder || pkill --session 0 fzf'
-    --bind 'enter:become:echo {1} | base64 --decode'
+    --bind 'enter,jump:become:echo {1} | base64 --decode'
     --bind 'tab:become:mode=- osh-fzf'
 )
 osh search --mode=$mode --session=$session --folder=$folder | fzf $style $args
