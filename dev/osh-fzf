@@ -16,11 +16,12 @@ set -eu -o pipefail
 # but fzf probably can give it with one of {q} or so? does fzf have a solution for escaping there?
 
 style=(
-    --height=70%
-    --min-height=10
-    --info=inline-right
-    --highlight-line
-    --preview-window=down:10:wrap
+    # NOTE no style now, leaving it up to the user
+    # --height=70%
+    # --min-height=10
+    # --info=inline-right
+    # --highlight-line
+    # --preview-window=down:10:wrap
     # NOTE --no-clear could be interesting, but flickering is not so bad now
 )
 
