@@ -52,7 +52,8 @@ args=(
     --print0
     --print-query
     # NOTE pkill makes sure we notice when the `osh search` fails in-between
-    --bind 'start:reload:osh search --mode=$mode --session=$session --folder=$folder || pkill --session 0 fzf'
+    # TODO would be better not to interfere with the start setting for nvim-like behaviour
+    --bind 'start:enable-search+unbind(s,e,u,q,r,space)+rebind(esc)+change-pointer(󰧞)+reload:osh search --mode=$mode --session=$session --folder=$folder || pkill --session 0 fzf'
     --bind 'enter,jump:become:echo {1} | base64 --decode'
     --bind 'tab:become:mode=- osh-fzf'
 )
