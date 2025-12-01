@@ -2,7 +2,9 @@
   description = "one shell history";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
+    config.url = "github:dkuettel/config/main";
+    nixpkgs.follows = "config/nixpkgs";
+    # nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
 
     # see https://pyproject-nix.github.io/uv2nix/usage/hello-world.html
 
