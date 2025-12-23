@@ -1,4 +1,0 @@
-#!/usr/bin/env zsh
-set -eux -o pipefail
-
-OSH_HOME=${0:a:h:h}/test-home path=(${0:a:h:h}/dev $path) uv run --project ${0:a:h:h} python -m osh $@
