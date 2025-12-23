@@ -64,12 +64,19 @@ def write_osh_events(forward_events: Sequence[Event], path: Path, lock: bool):
 
 def insert_osh_event(event: Event, path: Path, lock: bool):
     """insert the new event by bubbling up from the end until the right spot is found"""
+
+    if not path.exists() or path.stat().st_size == 0:
+        # because mmap doesnt work with empty files
+        write_osh_events([event], path, lock=lock)
+        return
+
     # NOTE mmap needs a file descriptor that is opened for updating, thus the "+"
     with path.open("r+b") as f:
         if lock:
             fcntl.flock(f, fcntl.LOCK_EX)
 
         # NOTE length=0 means map the full file
+        # (also, this fails on empty files)
         with mmap.mmap(f.fileno(), 0) as mm:
             insert_at = mm.size()
 
@@ -86,6 +93,9 @@ def insert_osh_event(event: Event, path: Path, lock: bool):
 
             data = encoder.encode(event)
             size = len(data)
+
+            if size > 2**16:
+                return
 
             shift_size = mm.size() - insert_at
             mm.resize(mm.size() + size + 2)
