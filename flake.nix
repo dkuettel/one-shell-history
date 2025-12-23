@@ -60,12 +60,15 @@
 
         # NOTE prod needs it, but maybe not in the global namespace?
         # not sure how to, because of the shell scripts
+        # TODO or we could rename them, so they dont clash?
+        # or just get the path injected, so we can use it only internally?
         prodPkgs = [
           (pkgs.runCommandLocal "osh-prod-deps" { } ''
             mkdir -p $out/bin
             ln -sfT ${pkgs.fzf}/bin/fzf $out/bin/fzf
             ln -sfT ${pkgs.util-linux}/bin/uuidgen $out/bin/uuidgen
             ln -sfT ${pkgs.procps}/bin/pkill $out/bin/pkill
+            ln -sfT ${./pkg}/bin/osh-fzf $out/bin/osh-fzf
           '')
         ];
 
