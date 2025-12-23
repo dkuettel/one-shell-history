@@ -3,6 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:dkuettel/nixpkgs/stable";
+    flake-utils.url = "github:numtide/flake-utils";
 
     # see https://pyproject-nix.github.io/uv2nix/usage/hello-world.html
 
@@ -29,107 +30,132 @@
     {
       self,
       nixpkgs,
+      flake-utils,
       pyproject-nix,
       uv2nix,
       pyproject-build-systems,
-      ...
     }@inputs:
-    let
-      inherit (nixpkgs) lib;
-      system = "x86_64-linux";
-      pkgs = nixpkgs.legacyPackages.${system};
-      dev-dependencies = with pkgs; [
-        ruff
-        basedpyright
-      ];
-      prod-dependencies = with pkgs; [
-        fzf
-        util-linux # for uuidgen
-        procps # for pkill
-      ];
-      python-version = pkgs.lib.strings.fileContents ./.python-version;
-      python-package = "python${pkgs.lib.strings.concatStrings (pkgs.lib.strings.splitString "." python-version)}";
-      python = pkgs.${python-package};
-      uv = pkgs.writeScriptBin "uv" ''
-        #!${pkgs.zsh}/bin/zsh
-        set -eu -o pipefail
-        UV_PYTHON=${python}/bin/python ${pkgs.uv}/bin/uv --no-python-downloads $@
-      '';
-      dev = pkgs.buildEnv {
-        name = "dev";
-        # TODO util-linux  # for uuidgen
-        paths = [
-          uv
-          python
-        ]
-        ++ dev-dependencies
-        ++ prod-dependencies;
-        extraOutputsToInstall = [ "lib" ];
-      };
-      workspace = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
-      overlay = workspace.mkPyprojectOverlay {
-        sourcePreference = "wheel";
-      };
-      pyprojectOverrides = final: prev: {
-        # from https://github.com/TyberiusPrime/uv2nix_hammer_overrides/tree/main
-        # TODO but i dont understand why the right build system is not automatically used
-        # TODO also how can they download pypi stuff without needing hashes to be updated?
-        pprofile = prev.pprofile.overrideAttrs (old: {
-          nativeBuildInputs =
-            (old.nativeBuildInputs or [ ]) ++ (final.resolveBuildSystem { setuptools = [ ]; });
-        });
-        pyprof2calltree = prev.pprofile.overrideAttrs (old: {
-          nativeBuildInputs =
-            (old.nativeBuildInputs or [ ]) ++ (final.resolveBuildSystem { setuptools = [ ]; });
-        });
-      };
-      pythonSet =
-        (pkgs.callPackage pyproject-nix.build.packages {
-          python = pkgs.python313;
-        }).overrideScope
-          (
-            lib.composeManyExtensions [
-              pyproject-build-systems.overlays.default
-              overlay
-              pyprojectOverrides
-            ]
-          );
-      venv = pythonSet.mkVirtualEnv "osh-env" workspace.deps.default;
-      env = pkgs.buildEnv {
-        name = "osh env";
-        paths = [ venv ] ++ prod-dependencies;
-      };
-      # TODO this doesnt seem to work, it leaks in the current dir into the python path
-      # does the scripts thing fix that? it doesnt. this is a bit ridiculous, no?
-      # -P probably works, but feels like that is wrong all over the place?
-      osh-prod = pkgs.writeScriptBin "osh" ''
-        #!${pkgs.zsh}/bin/zsh
-        set -eu -o pipefail
-        path=(${env}/bin $path) python -P -m osh $@
-      '';
-      app = pkgs.runCommandLocal "osh" { } ''
-        mkdir -p $out/bin
-        ln -sfT ${osh-prod}/bin/osh $out/bin/osh
-        ln -sfT ${./dev/osh-fzf} $out/bin/osh-fzf
-      '';
-      shell = pkgs.runCommandLocal "shell" { } ''
-        mkdir -p $out
-        ln -sfT ${./share} $out/share
-      '';
-    in
-    {
-      # > nix build .#name
-      packages.${system} = {
-        default = dev;
-        dev = dev;
-        app = app;
-        shell = shell;
-      };
+    flake-utils.lib.eachDefaultSystem (
+      system:
+      let
+        name = "osh";
 
-      # > nix run .#name
-      apps.${system}.default = {
-        type = "app";
-        program = "${app}/bin/osh";
-      };
-    };
+        pkgs = import nixpkgs {
+          inherit system;
+          config.allowUnfree = true;
+        };
+        inherit (pkgs) lib;
+        inherit (builtins) map;
+
+        python = pkgs.python313;
+
+        uv = pkgs.writeScriptBin "uv" ''
+          #!${pkgs.zsh}/bin/zsh
+          set -eu -o pipefail
+          UV_PYTHON=${python}/bin/python ${pkgs.uv}/bin/uv --no-python-downloads $@
+        '';
+        # for pyproject.toml
+        #   [tool.uv.build-backend]
+        #   namespace = true  # if you use namespace packages
+
+        prodPkgs = with pkgs; [
+          fzf
+          util-linux # for uuidgen
+          procps # for pkill
+          # TODO util-linux  # for uuidgen
+        ];
+
+        devPkgs = (
+          [
+            uv
+            python
+          ]
+          ++ (with pkgs; [
+            ruff
+            basedpyright
+            nil # nix language server
+            nixfmt-rfc-style # nixpkgs-fmt is deprecated
+          ])
+        );
+
+        devLibs = with pkgs; [
+          stdenv.cc.cc
+          # zlib
+          # libglvnd
+          # xorg.libX11
+          # glib
+          # eigen
+        ];
+
+        devLdLibs = pkgs.buildEnv {
+          name = "${name}-dev-ld-libs";
+          paths = map (lib.getOutput "lib") devLibs;
+        };
+
+        devEnv = pkgs.buildEnv {
+          name = "${name}-dev-env";
+          paths = devPkgs ++ devLibs ++ prodPkgs;
+        };
+
+        pyproject = uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
+        moduleOverrides =
+          final: prev:
+          let
+            # see https://github.com/TyberiusPrime/uv2nix_hammer_overrides/tree/main
+            # I dont fully understand what we do here, we switch to setuptools instead of wheels?
+            # for libs that need to build for nix? and we might have to add build dependencies?
+            setuptools =
+              prev_lib:
+              prev_lib.overrideAttrs (old: {
+                nativeBuildInputs =
+                  (old.nativeBuildInputs or [ ]) ++ (final.resolveBuildSystem { setuptools = [ ]; });
+              });
+          in
+          {
+            pprofile = setuptools prev.pprofile;
+            pyprof2calltree = setuptools prev.pyprof2calltree;
+          };
+        modules =
+          (pkgs.callPackage pyproject-nix.build.packages {
+            python = python;
+          }).overrideScope
+            (
+              lib.composeManyExtensions [
+                pyproject-build-systems.overlays.default
+                (pyproject.mkPyprojectOverlay { sourcePreference = "wheel"; })
+                moduleOverrides
+              ]
+            );
+        venv = modules.mkVirtualEnv "${name}-venv" pyproject.deps.default;
+        inherit (pkgs.callPackages pyproject-nix.build.util { }) mkApplication;
+        app = mkApplication {
+          venv = venv;
+          package = modules.osh;
+        };
+        package = pkgs.buildEnv {
+          name = "${name}-env";
+          paths = [ app ] ++ prodPkgs;
+          postBuild = ''
+            # TODO for example add some $out/share/zsh/site-functions/_name for completions
+          '';
+        };
+
+        shell = pkgs.runCommandLocal "shell" { } ''
+          mkdir -p $out
+          ln -sfT ${./share} $out/share
+        '';
+      in
+      {
+        devShells.default = pkgs.mkShellNoCC {
+          packages = [ devEnv ];
+          LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath [ devLdLibs ]}";
+          shellHook = ''
+            export PATH=$PWD/bin:$PATH
+          '';
+        };
+
+        packages.default = package;
+        packages.shell = shell;
+      }
+    );
 }
