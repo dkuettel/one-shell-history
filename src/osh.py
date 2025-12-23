@@ -341,7 +341,7 @@ def preview_from_event(event: Event | BaggedEvent, tz: tzinfo) -> str:
         case BaggedEvent():
             parts = [
                 f"[ran {event.count:_} times, most recently at {ts}]",
-                f"[{round(100*event.success_ratio)}% success, {round(100*event.failure_ratio)}% failure, {round(100*event.unknown_ratio)}% unknown]",
+                f"[{round(100 * event.success_ratio)}% success, {round(100 * event.failure_ratio)}% failure, {round(100 * event.unknown_ratio)}% unknown]",
                 "",
                 event.command,
             ]
@@ -406,7 +406,11 @@ class Mode(Enum):
     bag = "bag"
 
 
-app = typer.Typer(pretty_exceptions_enable=False)
+app = typer.Typer(
+    pretty_exceptions_enable=False,
+    no_args_is_help=True,
+    rich_markup_mode=None,
+)
 
 
 @app.command("search")
@@ -509,10 +513,10 @@ def app_bench():
     assert local_tz is not None
     print(id(next(events)))
     first = time.perf_counter()
-    print(f"first after {(first-start)*1000:_}ms")
+    print(f"first after {(first - start) * 1000:_}ms")
     print(sum(1 for _event in events))
     last = time.perf_counter()
-    print(f"rest after {(last-first)*1000:_}ms")
+    print(f"rest after {(last - first) * 1000:_}ms")
 
 
 @app.command("nop")
@@ -670,11 +674,7 @@ def app_report():
         print()
         print(f"  Only {f(failure_count)} of your efforts have met with failure.")
         print(
-            f"  Your success rate is confirmed at {round(100*success_rate)} over one hundred."
+            f"  Your success rate is confirmed at {round(100 * success_rate)} over one hundred."
         )
     print()
     print(f"-- Good day, Commander.")
-
-
-if __name__ == "__main__":
-    app()
