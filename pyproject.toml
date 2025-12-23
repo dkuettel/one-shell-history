@@ -10,7 +10,7 @@ dependencies = [
 ]
 
 [project.scripts]
-osh = "osh:main"
+osh = "osh:app"
 
 [build-system]
 requires = ["hatchling"]
