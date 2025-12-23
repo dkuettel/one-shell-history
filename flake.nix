@@ -34,7 +34,7 @@
       pyproject-nix,
       uv2nix,
       pyproject-build-systems,
-    }@inputs:
+    }:
     flake-utils.lib.eachDefaultSystem (
       system:
       let
@@ -58,11 +58,15 @@
         #   [tool.uv.build-backend]
         #   namespace = true  # if you use namespace packages
 
-        prodPkgs = with pkgs; [
-          fzf
-          util-linux # for uuidgen
-          procps # for pkill
-          # TODO util-linux  # for uuidgen
+        # NOTE prod needs it, but maybe not in the global namespace?
+        # not sure how to, because of the shell scripts
+        prodPkgs = [
+          (pkgs.runCommandLocal "osh-prod-deps" { } ''
+            mkdir -p $out/bin
+            ln -sfT ${pkgs.fzf}/bin/fzf $out/bin/fzf
+            ln -sfT ${pkgs.util-linux}/bin/uuidgen $out/bin/uuidgen
+            ln -sfT ${pkgs.procps}/bin/pkill $out/bin/pkill
+          '')
         ];
 
         devPkgs = (
